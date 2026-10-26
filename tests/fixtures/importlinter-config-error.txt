@@ -1,0 +1,5 @@
+=============
+Import Linter
+=============
+
+Could not find package 'nosuchpkg' in your Python path.

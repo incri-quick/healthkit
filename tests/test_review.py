@@ -102,6 +102,22 @@ def test_a_type_stub_file_is_reviewed_too(repo, capsys):
     assert "types.pyi:1: [ruff F401]" in capsys.readouterr().out
 
 
+def test_the_projects_own_ruff_excludes_are_respected(repo, capsys):
+    # Found in slice 003: files passed explicitly made ruff ignore the project's excludes.
+    repo.write("pyproject.toml", '[tool.ruff]\nextend-exclude = ["generated"]\n')
+    repo.write("app.py", "x = 1\n")
+    base = repo.commit("base")
+    repo.write("generated/client.py", "import os\n")
+    repo.write("app.py", "x = 1\nimport os\n")
+    repo.commit()
+
+    review(base)
+
+    out = capsys.readouterr().out
+    assert "app.py:2: [ruff F401]" in out
+    assert "generated/client.py" not in out
+
+
 def test_outside_a_git_repo_is_an_error(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
 

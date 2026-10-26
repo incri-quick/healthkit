@@ -5,6 +5,33 @@ Newest first.
 
 ---
 
+## L-010 A verifier's "CONFIRMED" without output is an opinion (2026-10-26)
+
+The slice 003 verifier reported CONFIRMED and "production-ready" with no command
+output and three requested cases silently skipped. Running those three by hand took
+minutes; all passed, but the report itself proved nothing.
+
+**Changed:** a verification report without pasted output for each case is sent back
+or re-done; "all handled correctly" is not a result.
+
+## L-009 Check the run happened where you think (2026-10-26)
+
+A command chained `clone && cd && export && run`. The clone failed (Windows path
+length), so `cd` and `export` never happened and the run used the previous directory
+and no Opengrep. Then the "Opengrep not found" message was wrongly blamed; it was right.
+
+**Changed:** setup and run are separate steps; each run prints where it ran, and setup
+is verified (files present, expected commit) before the run.
+
+## L-008 Passing files explicitly can switch off the project's own settings (2026-10-26)
+
+ruff ignores a project's `exclude` settings for files named on the command line unless
+`--force-exclude` is given. healthkit passed files explicitly, so it overrode every
+project's ruff excludes, and flagged its own rule fixtures.
+
+**Changed:** each adapter states which of the target project's own settings it honours,
+and a test covers it.
+
 ## L-007 A surviving mutant points at a missing test (2026-10-26)
 
 Breaking the diff parser's deletion-only guard on purpose did not fail any test. The

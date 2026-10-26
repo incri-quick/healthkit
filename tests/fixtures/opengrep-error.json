@@ -1,0 +1,13 @@
+{
+ "results": [],
+ "errors": [
+  {
+   "code": 2,
+   "level": "warn",
+   "type": "Timeout",
+   "rule_id": "C.Users.legio.AppData.Local.Temp.claude.c--Users-legio-Workspace-Integrated-RPA-quickrpa-integrated-backend.35db7486-60b1-461c-a7f9-303f23092bf4.scratchpad.tools.og-rules.python.lang.security.audit.insecure-transport.requests.request-with-http",
+   "message": "Timeout when running C.Users.legio.AppData.Local.Temp.claude.c--Users-legio-Workspace-Integrated-RPA-quickrpa-integrated-backend.35db7486-60b1-461c-a7f9-303f23092bf4.scratchpad.tools.og-rules.python.lang.security.audit.insecure-transport.requests.request-with-http on studio_workflow\\api\\workflow.py:\n ",
+   "path": "studio_workflow\\api\\workflow.py"
+  }
+ ]
+}

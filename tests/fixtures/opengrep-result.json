@@ -1,0 +1,72 @@
+{
+ "results": [
+  {
+   "check_id": "C.Users.legio.Workspace.healthkit.slices.001-tool-trial.probes.exception-text-in-reply",
+   "path": "agent\\utils.py",
+   "start": {
+    "line": 198,
+    "col": 9,
+    "offset": 8521
+   },
+   "end": {
+    "line": 198,
+    "col": 51,
+    "offset": 8563
+   },
+   "extra": {
+    "metavars": {
+     "$EXC": {
+      "start": {
+       "line": 197,
+       "col": 12,
+       "offset": 8489
+      },
+      "end": {
+       "line": 197,
+       "col": 26,
+       "offset": 8503
+      },
+      "abstract_content": "FileStoreError"
+     },
+     "$CLS": {
+      "start": {
+       "line": 198,
+       "col": 15,
+       "offset": 8527
+      },
+      "end": {
+       "line": 198,
+       "col": 24,
+       "offset": 8536
+      },
+      "abstract_content": "HttpError"
+     },
+     "$E": {
+      "start": {
+       "line": 198,
+       "col": 46,
+       "offset": 8558
+      },
+      "end": {
+       "line": 198,
+       "col": 49,
+       "offset": 8561
+      },
+      "abstract_content": "exc"
+     }
+    },
+    "message": "The exception's own text goes back to the caller. It can carry internal details (database host, file paths) and blames the user for our fault. Log the exception type; reply with a fixed message.",
+    "metadata": {
+     "incident": "QuickRPA AA-15"
+    },
+    "severity": "ERROR",
+    "fingerprint": "60636dfc304bc7e94d96fbfe2cfdcd3ebc5ed6f119ccbeafb85b192c442d24967c6f3c412aeeef43cc661b68e68c28b900746aa5a16953006b6efb1f99db398f_0",
+    "lines": "        raise HttpError(exc.status_code, str(exc)) from exc",
+    "is_ignored": false,
+    "validation_state": "NO_VALIDATOR",
+    "engine_kind": "OSS"
+   }
+  }
+ ],
+ "errors": []
+}

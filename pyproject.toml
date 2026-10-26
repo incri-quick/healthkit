@@ -26,7 +26,10 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-extend-exclude = ["slices"]  # trial evidence and measurement scripts, not toolkit code
+extend-exclude = [
+    "slices",  # trial evidence and measurement scripts, not toolkit code
+    "src/healthkit/rules/*.py",  # rule fixtures: deliberately bad code
+]
 
 [tool.ruff.lint]
 select = ["ALL"]

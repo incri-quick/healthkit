@@ -10,8 +10,10 @@ import sys
 from pathlib import Path
 
 from healthkit import gitdiff
-from healthkit.findings import ToolError
-from healthkit.tools import ruff
+from healthkit.findings import Finding, ToolError, ToolSkipped
+from healthkit.tools import importlinter, opengrep, ruff
+
+GATE_TOOLS = (ruff, opengrep, importlinter)  # D-014: the pre-push gate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,16 +36,36 @@ def _review(cwd: Path, base: str) -> int:
     if not python_files:
         print("healthkit: nothing to review (no changed Python files)")
         return 0
-    try:
-        findings = ruff.run(root, python_files)
-    except ToolError as exc:
-        print(f"healthkit: {exc}", file=sys.stderr)
-        return 2
-    # A set: tools can emit the same finding twice (ruff PLC2701, one per imported name).
-    new = {f for f in findings if f.line in changed.get(f.path, set())}
-    for finding in sorted(new, key=lambda f: (f.path, f.line, f.rule)):
+
+    findings: set[Finding] = set()
+    ran: list[str] = []
+    skipped: list[str] = []
+    failed = False
+    # One try per tool on purpose: a failing tool must not hide the others' findings.
+    for tool in GATE_TOOLS:
+        try:
+            # A set: tools can emit the same finding twice (ruff PLC2701, one per name).
+            findings |= set(tool.run(root, python_files))
+            ran.append(tool.NAME)
+        except ToolSkipped as exc:  # noqa: PERF203 - see above
+            skipped.append(f"{tool.NAME} ({exc})")
+        except ToolError as exc:
+            print(f"healthkit: {tool.NAME}: {exc}", file=sys.stderr)
+            failed = True
+
+    new = sorted(
+        (f for f in findings if f.line in changed.get(f.path, set())),
+        key=lambda f: (f.path, f.line, f.tool, f.rule),
+    )
+    for finding in new:
         print(finding.render())
-    print(f"healthkit: {len(new)} finding(s) on changed lines in {len(python_files)} file(s)")
+    summary = f"healthkit: {len(new)} finding(s) on changed lines in {len(python_files)} file(s)"
+    summary += f" | ran: {', '.join(ran) or 'nothing'}"
+    if skipped:
+        summary += f" | skipped: {'; '.join(skipped)}"
+    print(summary)
+    if failed:
+        return 2
     return 1 if new else 0
 
 

@@ -1,0 +1,10 @@
+rules:
+  - id: raw-json-body
+    languages: [python]
+    severity: WARNING
+    message: >-
+      This route parses the request body itself. Use the project's one body
+      reader, so bad bytes, deep nesting and non-object bodies are a 400, not a 500.
+    metadata:
+      incident: QuickRPA AA-65
+    pattern: json.loads($REQ.body)

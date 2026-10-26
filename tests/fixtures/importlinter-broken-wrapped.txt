@@ -1,0 +1,44 @@
+=============
+Import Linter
+=============
+
+
+---------
+Contracts
+---------
+
+Analyzed 1079 files, 2780 dependencies.
+---------------------------------------
+
+Routes may import services; services may not import routes (AA-06) BROKEN
+
+Contracts: 0 kept, 1 broken.
+
+
+----------------
+Broken contracts
+----------------
+
+Routes may import services; services may not import routes (AA-06)
+------------------------------------------------------------------
+
+studio_robot.services is not allowed to import studio_robot.api:
+
+- studio_robot.services -> studio_workflow.execution.history_codec (l.32, 
+l.963)
+  studio_workflow.execution.history_codec -> studio_robot.tasks (l.826)
+  studio_robot.tasks -> studio_robot.google_oauth (l.30)
+  studio_robot.google_oauth -> studio_robot.run_readiness (l.702)
+  studio_robot.run_readiness -> studio_robot.api.robots (l.159)
+
+- studio_robot.services -> studio_robot.tasks (l.967)
+  studio_robot.tasks -> studio_robot.watchdog (l.31)
+  studio_robot.watchdog -> studio_robot.api.robots (l.410)
+
+- studio_robot.services -> studio_robot.run_cancel (l.995)
+  studio_robot.run_cancel -> studio_robot.tasks (l.47, l.104)
+  studio_robot.tasks -> studio_workflow.consumers (l.501)
+  studio_workflow.consumers -> studio_workflow.api.workflow (l.327)
+  studio_workflow.api.workflow -> studio_robot.api.robots (l.4027)
+
+

@@ -19,3 +19,7 @@ class Finding:
 
 class ToolError(Exception):
     """A tool did not run, or its output could not be read. Never a pass (L-004)."""
+
+
+class ToolSkipped(Exception):  # noqa: N818 - a signal, not an error
+    """There is nothing for this tool to check against (e.g. no contract). Said out loud."""

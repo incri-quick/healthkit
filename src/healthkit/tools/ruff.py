@@ -8,6 +8,7 @@ from pathlib import Path
 
 from healthkit.findings import Finding, ToolError
 
+NAME = "ruff"
 COMMAND = ["uvx", "ruff@0.17.2"]
 # The gate set from slice 001 (RESULTS.md, ruff verdict).
 GATE_RULES = "F821,F401,F811,I001,RUF052,N806,N814,PLC2701,BLE001"
@@ -32,6 +33,7 @@ def _run_batch(root: Path, files: list[str]) -> list[Finding]:
         "--output-format",
         "json",
         "--exit-zero",
+        "--force-exclude",  # files passed explicitly would otherwise bypass the project's excludes
         *files,
     ]
     try:
