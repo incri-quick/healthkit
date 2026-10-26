@@ -103,6 +103,35 @@ it is generic and holds no client details. The name "healthkit" stays a working 
 Susheel co-owns the toolkit and agreed (verbally) that his users/auth review notes
 may be used as replay-test data.
 
+## D-013 Tool set after the trial — decided (2026-10-26), supersedes the shortlist in D-006
+
+Measured on QuickRPA backend (slice 001, `slices/001-tool-trial/RESULTS.md`).
+
+- **Keep:** ruff 0.17.2 (curated rule set), Opengrep 1.32.0 (engine for our own rules
+  only), import-linter 2.15, pyscn 1.33.0 (scorecard), Skylos 5.1.0 (`--no-grep-verify`).
+- **Drop:** vulture (15% real), Opengrep community rules (25% real, Commons Clause
+  licence, timeouts on the largest files).
+- **Not yet trialled:** diff-cover, Schemathesis, gitleaks, pip-audit, deptry,
+  django-zeal, django-migration-linter. Trial each when its milestone arrives.
+- O-5 resolved: Opengrep has a native, signed Windows build.
+
+## D-014 Two speeds: gate vs whole-repo — decided (2026-10-26)
+
+- **Pre-push gate, every push, changed files only, seconds:** ruff, Opengrep (own
+  rules), import-linter.
+- **Whole-repo, nightly or on demand, minutes:** Skylos (dead code needs the whole
+  repo to know nothing calls a symbol), pyscn (scorecard).
+
+Why: dead-code analysis cannot be scoped to one module (anything called only from
+other modules would look dead), and Skylos takes ~3 minutes on 134k lines.
+
+## D-015 Near-copy detection is still unsolved — open (2026-10-26)
+
+pyscn found only exact copies. The tenancy helper `_get_workspace_or_404` exists in
+9 files in 3 versions; the 3 drifted ones were found by a same-name search across
+modules, not by any trialled tool. Candidates: same-name functions across modules,
+and project rules that require the shared function.
+
 ---
 
 ## Open
