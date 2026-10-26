@@ -5,6 +5,25 @@ Newest first.
 
 ---
 
+## L-007 A surviving mutant points at a missing test (2026-10-26)
+
+Breaking the diff parser's deletion-only guard on purpose did not fail any test. The
+fixtures had no file changed only by deletion. One line added to the fixture, and the
+mutant was caught.
+
+**Changed:** every slice breaks its core logic on purpose at least twice before
+calling the tests good.
+
+## L-006 A hand-typed fixture hid a real bug (2026-10-26)
+
+The unit test for the diff parser used a diff typed by hand. Real git ends a path
+containing a space with a TAB on the `+++` line; the typed fixture did not, so the
+unit test passed while files in "Bot Starter Kit" were silently skipped. Only the
+end-to-end test on a real git repo caught it.
+
+**Changed:** fixtures for another tool's output are captured from that tool, never
+typed from memory (rule 5 applies to formats, not only to incidents).
+
 ## L-005 A prediction is the "failing test" for a tool (2026-10-26)
 
 You cannot write a failing unit test for someone else's tool, but you can write the

@@ -132,6 +132,12 @@ pyscn found only exact copies. The tenancy helper `_get_workspace_or_404` exists
 modules, not by any trialled tool. Candidates: same-name functions across modules,
 and project rules that require the shared function.
 
+## D-016 Slice budget counts source, not tests — decided (2026-10-26)
+
+A slice stays under about 300 lines of **source**. Tests do not count against it:
+more tests are wanted, and the formatter spreads test fixtures over many lines.
+Slice 002 (208 source, 269 tests) is accepted under this rule.
+
 ---
 
 ## Open

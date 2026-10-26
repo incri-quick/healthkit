@@ -17,7 +17,7 @@ reliably misses. Each rule answers one of them. They are not optional.
 | 4 | Unsafe defaults | No `shell=True`. Pin tool versions. No network by default. Never modify user files unless `--fix` is passed. |
 | 5 | Tests that prove nothing | Tests first, shown failing before the code exists. Test data comes from real incidents, not invented examples. Never delete, skip or weaken a test without the owner's explicit OK. |
 | 6 | Overconfidence | No "it works" without pasted command output. Each slice is checked by a fresh agent that tries to refute it, plus a real run on a real project. |
-| 7 | Nobody understands the code | Slices stay under about 300 lines of diff. Each ends with: what, why, how to test, what is uncertain, one lesson. The owner reads the diff before commit. |
+| 7 | Nobody understands the code | Slices stay under about 300 lines of source; tests do not count against it (D-016). Each ends with: what, why, how to test, what is uncertain, one lesson. The owner reads the diff before commit. |
 | 8 | Destructive actions | Feature branches only. Claude never pushes or merges. |
 
 ## The loop for every slice
