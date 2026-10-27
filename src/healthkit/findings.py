@@ -16,6 +16,9 @@ class Finding:
     # with the tool's own rules. On a changed line it needs a human, never a pass
     # (slice 005, D-018).
     suppressed: bool = False
+    # Shown for a person to look at, never a failed gate: a rule below the precision a
+    # blocking rule needs (slice 008: soft-delete-read, about half real on unseen code).
+    advisory: bool = False
 
     def render(self) -> str:
         return f"{self.path}:{self.line}: [{self.tool} {self.rule}] {self.message}"

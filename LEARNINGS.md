@@ -5,6 +5,27 @@ Newest first.
 
 ---
 
+## L-019 A negative result needs the same checking as a positive one (2026-10-27)
+
+Two runtime probes of `soft-delete-read` findings came back "not a bug": an archived robot
+was not listed, and a deleted file was refused. Both were bad setups: the test user could
+not see the probe's workspace, and the file owner had no Studio access. Set up correctly,
+the archived robot was listed.
+
+**Changed:** before a probe counts as a refutation, it must show it reached the code in
+question (the right user, the right tenant, the right status code for the right reason).
+
+## L-018 A second project finds what the first cannot (2026-10-27)
+
+`soft-delete-read` was tuned on QuickRPA, where models live in `models.py`. On the
+second project (mulearnbackend, models in `db/*.py`) it found no models at all: a silent
+zero, not an error. Precision also fell from what the tuned sample suggested: 25% on the
+first read, 41% on QuickRPA's held-out findings, 55% on the second project.
+
+**Changed:** D-022 holds in practice: a rule is measured on data it was not tuned on and on
+a second project before it is called generic, and "found nothing" on a new project is
+checked by hand before it is believed.
+
 ## L-017 A sweep that writes data changes what the next sweep can find (2026-10-27)
 
 The second QuickRPA API sweep, same tool and settings, reported 4 crashes instead of 6.

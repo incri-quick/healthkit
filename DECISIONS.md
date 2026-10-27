@@ -205,8 +205,9 @@ New order:
 
 1. **API pack** ("never a 500"): catches bad-input crashes without a rule per bug.
    The f-string gap in `exception-text-in-reply` rides along.
-2. **QuickRPA knowledge pack**: soft-delete reads, `assert_perm` scope, protected-field
-   `save()`, token reads outside their door: where QuickRPA's real bugs have been.
+2. ~~**QuickRPA knowledge pack**: soft-delete reads, `assert_perm` scope, protected-field
+   `save()`, token reads outside their door: where QuickRPA's real bugs have been.~~
+   Renamed by D-022: **project checks + Django pack** (slice 008).
 3. **Live run on Susheel's next module**: the clean, out-of-sample measurement.
 4. Near-copy detection (D-015) and an unused-route check.
 5. **"Names that lie" moves from the gate to the advisory AI layer**: a rule cannot judge
@@ -216,6 +217,36 @@ New order:
 
 Gains from rules written using the replay's misses are measured on new code only;
 scoring them on the 45 they came from would be circular.
+
+## D-022 healthkit never contains one project's knowledge — decided (2026-10-27)
+
+D-021 step 2 was named after a customer ("QuickRPA knowledge pack"), and the first slice
+008 draft followed it with a hard-coded list of QuickRPA's models. The owner stopped it:
+healthkit is a separate project, built for every project.
+
+- **healthkit ships** mechanisms (gate, project rules, project checks) and generic packs
+  (Python, Django, API). A pack rule works on a project it has never seen, with no names
+  from any one project in it.
+- **A project's own knowledge** (its model lists, allow entries, commands, extra rules)
+  lives in that project's `.healthkit/` folder, written by that team. This is what D-005
+  calls the project pack: it is never shipped in this repo.
+- **QuickRPA is the test bed**: where rules are measured and bugs are found, never what a
+  rule is built for. Its config is written in the test-bed clone, as a customer would.
+- A rule found in one project is measured on at least one other before it is called
+  generic; when no second project is available, it ships marked "measured on one project".
+- Slices are named after what they build, never after a customer.
+
+## D-023 Advisory findings: shown, never blocking — decided (2026-10-27)
+
+`soft-delete-read` found real bugs (one confirmed by running it on QuickRPA's local stack)
+but measured about half precision on code it was never tuned on (QuickRPA held-out 41%,
+mulearnbackend 55%), under the 70% slice 008 set for a rule that fails the gate.
+
+- A rule below that bar ships **advisory**: printed as `worth a look: ...` and counted in
+  the summary, never changing the exit code.
+- A rule moves from advisory to blocking only when it reaches the bar on unseen code from
+  at least two projects.
+- Advisory findings follow the same changed-lines, exclusion and allow rules as the rest.
 
 ---
 
@@ -234,7 +265,7 @@ scoring them on the 45 they came from would be circular.
 | M1 | Tool trial on QuickRPA backend: keep or drop each candidate | 1 day | done (slice 001) |
 | M2 | Core: diff filter, finding format, baseline, gate, report, replay harness | 3–4 days | mostly (slices 002-006); baseline file and reviewer-style report not built |
 | M3 | Python pack: ruff + Opengrep adapters, names-that-lie and error-handling rules | 3–4 days | partly: adapters + 2 rules; names-that-lie moved to the AI layer (D-021) |
-| M4 | Django pack + QuickRPA project pack | 3 days | partly: `.healthkit/` (slice 004); knowledge rules **next** (D-021) |
+| M4 | Django pack + project packs (each project's own `.healthkit/`, D-022) | 3 days | partly: `.healthkit/` (slice 004); project checks + first Django rule **next** (slice 008) |
 | M5 | First replay score; first live run on Susheel's next module | 1 day | score done (slice 006); live run pending |
 | M6 | API pack: Schemathesis "never a 500" sweep | 2 days | done (slice 007): 6 real crashes in QuickRPA; database reset per run not built |
 | M7 | Module scorecard (pyscn + coverage per app) | 2 days | not started |

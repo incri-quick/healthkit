@@ -12,11 +12,11 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from healthkit import apicheck, config, gitdiff
+from healthkit import apicheck, checks, config, gitdiff
 from healthkit.findings import Finding, ToolError, ToolSkipped
-from healthkit.tools import importlinter, opengrep, ruff
+from healthkit.tools import django, importlinter, opengrep, ruff
 
-GATE_TOOLS = (ruff, opengrep, importlinter)  # D-014: the pre-push gate
+GATE_TOOLS = (ruff, opengrep, importlinter, django)  # D-014: the pre-push gate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,12 +45,16 @@ def _review(cwd: Path, base: str) -> int:
         changed = gitdiff.changed_lines(root, base)
         referee_changes = gitdiff.files_touched_under(root, base, config.HOME.as_posix())
         settings = config.load(root)
+        # Commands from the BASE branch only: a branch's new command must not run before a
+        # person approves it (slice 008, D-018).
+        approved = config.parse(gitdiff.file_at(root, base, config.CONFIG.as_posix()))
     except (gitdiff.GitError, config.ConfigError) as exc:
         print(f"healthkit: {exc}", file=sys.stderr)
         return 2
     python_files = sorted(path for path in changed if path.endswith((".py", ".pyi")))
     reviewed = [path for path in python_files if not settings.is_excluded(path)]
     run = _run_tools(root, reviewed) if reviewed else _Run()
+    project = checks.run(root, approved.checks, sorted(changed))
 
     on_changed_lines = [
         f
@@ -61,10 +65,14 @@ def _review(cwd: Path, base: str) -> int:
         (f for f in on_changed_lines if not settings.allows(f)),
         key=lambda f: (f.path, f.line, f.tool, f.rule),
     )
-    new = [f for f in not_allowed if not f.suppressed]
+    new = [f for f in not_allowed if not f.suppressed and not f.advisory]
     suppressed = [f for f in not_allowed if f.suppressed]
+    advisory = [f for f in not_allowed if f.advisory and not f.suppressed]
     for finding in new:
         print(finding.render())
+    for finding in advisory:
+        print(f"worth a look: {finding.render()}")
+    new += _report_checks(project, run)
     # D-018: the referee changed, or a check was switched off inline. A person decides.
     approvals = [f"{path}" for path in referee_changes] + [
         f"{f.path}:{f.line} suppresses {f.tool} {f.rule}" for f in suppressed
@@ -72,20 +80,21 @@ def _review(cwd: Path, base: str) -> int:
     for item in approvals:
         print(f"needs human approval: {item}")
 
-    if not reviewed:
+    if not reviewed and not new:
         summary = "healthkit: nothing to review (no changed Python files)"
     elif new:
-        summary = f"healthkit: {len(new)} finding(s) on changed lines in {len(reviewed)} file(s)"
+        summary = f"healthkit: {len(new)} finding(s) in {len(reviewed)} changed file(s) and checks"
     else:
         summary = f"healthkit: no known problems on changed lines in {len(reviewed)} file(s)"
     parts = [summary]
-    if reviewed:
+    if reviewed or run.ran:
         parts.append(f"ran: {', '.join(run.ran) or 'nothing'}")
     parts += [f"skipped: {'; '.join(run.skipped)}"] if run.skipped else []
     excluded = len(python_files) - len(reviewed)
     parts += [f"excluded: {excluded} file(s)"] if excluded else []
     allowed = len(on_changed_lines) - len(not_allowed)
     parts += [f"allowed: {allowed}"] if allowed else []
+    parts += [f"worth a look: {len(advisory)}"] if advisory else []
     parts += [f"needs human approval: {len(approvals)} item(s)"] if approvals else []
     print(" | ".join(parts))
 
@@ -96,6 +105,20 @@ def _review(cwd: Path, base: str) -> int:
     return 3 if approvals else 0
 
 
+def _report_checks(project: checks.CheckRun, run: _Run) -> list[Finding]:
+    """Print the project checks' results (whole-project, not tied to a changed line)."""
+    run.ran += project.ran
+    run.skipped += project.skipped
+    for error in project.errors:
+        print(f"healthkit: {error}", file=sys.stderr)
+    run.failed = run.failed or bool(project.errors)
+    for finding in project.findings:
+        print(finding.render())
+        for line in project.tails[finding.rule]:
+            print(f"    {line}")
+    return project.findings
+
+
 def _run_tools(root: Path, files: list[str]) -> _Run:
     run = _Run()
     # One try per tool on purpose: a failing tool must not hide the others' findings.
@@ -104,6 +127,7 @@ def _run_tools(root: Path, files: list[str]) -> _Run:
             # A set: tools can emit the same finding twice (ruff PLC2701, one per name).
             run.findings |= set(tool.run(root, files))
             run.ran.append(tool.NAME)
+            run.skipped += tool.notes(root) if hasattr(tool, "notes") else []
         except ToolSkipped as exc:
             run.skipped.append(f"{tool.NAME} ({exc})")
         except ToolError as exc:

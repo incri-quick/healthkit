@@ -90,3 +90,18 @@ def files_touched_under(root: Path, base: str, folder: str) -> list[str]:
     names = _git(root, "diff", "--name-only", "--no-renames", f"{base}...HEAD")
     prefix = folder.casefold().rstrip("/") + "/"
     return sorted(name for name in names.splitlines() if name.casefold().startswith(prefix))
+
+
+def file_at(root: Path, ref: str, path: str) -> str | None:
+    """A file's text as `ref` has it, or None when it does not exist there."""
+    try:
+        _git(root, "cat-file", "-e", f"{ref}:{path}")
+    except GitError:
+        return None
+    return _git(root, "show", f"{ref}:{path}")
+
+
+def project_files(root: Path) -> list[str]:
+    """Every file git tracks or would track (not ignored): never `.venv` or build output."""
+    listing = _git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+    return listing.split("\0")[:-1]

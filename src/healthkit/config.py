@@ -23,8 +23,10 @@ PROJECT_RULES = HOME / "rules"
 # code placed in a migrations folder is still reviewed (slice 005, D-019). And the
 # referee's own files.
 DEFAULT_EXCLUDE = ("**/migrations/[0-9][0-9][0-9][0-9]_*.py", ".healthkit/**")
-_TOP_KEYS = {"exclude", "allow"}
+_TOP_KEYS = {"exclude", "allow", "check", "django"}
 _ALLOW_KEYS = {"rule", "path", "reason"}
+_CHECK_KEYS = {"name", "command", "paths", "reason", "timeout"}
+_DJANGO_KEYS = {"soft_delete_fields"}
 
 
 class ConfigError(Exception):
@@ -39,9 +41,22 @@ class Allow:
 
 
 @dataclass(frozen=True)
+class Check:
+    """A project's own guard command (slice 008). Run from the BASE branch's config only."""
+
+    name: str
+    command: tuple[str, ...]
+    paths: tuple[str, ...]
+    reason: str
+    timeout: int = 300
+
+
+@dataclass(frozen=True)
 class Settings:
     exclude: tuple[str, ...] = DEFAULT_EXCLUDE
     allow: tuple[Allow, ...] = ()
+    checks: tuple[Check, ...] = ()
+    soft_delete_fields: tuple[str, ...] = ("is_deleted",)
 
     def is_excluded(self, path: str) -> bool:
         return any(glob_match(path, pattern) for pattern in self.exclude)
@@ -55,14 +70,68 @@ def load(root: Path) -> Settings:
     if not file.is_file():
         return Settings()
     try:
-        data = tomllib.loads(file.read_text(encoding="utf-8-sig"))  # Windows editors add a BOM
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+        return parse(file.read_text(encoding="utf-8-sig"))  # Windows editors add a BOM
+    except UnicodeDecodeError as exc:
+        msg = f"{CONFIG.as_posix()}: {exc}"
+        raise ConfigError(msg) from exc
+
+
+def parse(text: str | None) -> Settings:
+    if text is None:
+        return Settings()
+    try:
+        data = tomllib.loads(text.removeprefix("\ufeff"))
+    except tomllib.TOMLDecodeError as exc:
         msg = f"{CONFIG.as_posix()}: {exc}"
         raise ConfigError(msg) from exc
     _no_unknown_keys(data, _TOP_KEYS, CONFIG.as_posix())
     exclude = [_path(p, "exclude") for p in _list(data.get("exclude", []), "exclude")]
     allow = [_allow(entry) for entry in _list(data.get("allow", []), "allow")]
-    return Settings(exclude=DEFAULT_EXCLUDE + tuple(exclude), allow=tuple(allow))
+    checks = [_check(entry) for entry in _list(data.get("check", []), "check")]
+    django = data.get("django", {})
+    if not isinstance(django, dict):
+        msg = f"{CONFIG.as_posix()}: [django] must be a table"
+        raise ConfigError(msg)
+    _no_unknown_keys(django, _DJANGO_KEYS, "[django]")
+    fields = _list(django.get("soft_delete_fields", ["is_deleted"]), "soft_delete_fields")
+    return Settings(
+        exclude=DEFAULT_EXCLUDE + tuple(exclude),
+        allow=tuple(allow),
+        checks=tuple(checks),
+        soft_delete_fields=tuple(_text(f, "soft_delete_fields") for f in fields),
+    )
+
+
+def _check(entry: object) -> Check:
+    if not isinstance(entry, dict):
+        msg = f"{CONFIG.as_posix()}: each [[check]] entry must be a table"
+        raise ConfigError(msg)
+    where = f"[[check]] {entry.get('name')!r}"
+    _no_unknown_keys(entry, _CHECK_KEYS, where)
+    for key in ("name", "reason"):
+        _text(entry.get(key), f"{where}: '{key}'")
+    command = entry.get("command")
+    if not isinstance(command, list) or not command:  # never a shell string
+        msg = f"{CONFIG.as_posix()}: {where}: 'command' must be a list of arguments"
+        raise ConfigError(msg)
+    timeout = entry.get("timeout", 300)
+    if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
+        msg = f"{CONFIG.as_posix()}: {where}: 'timeout' must be a positive number of seconds"
+        raise ConfigError(msg)
+    return Check(
+        name=entry["name"].strip(),
+        command=tuple(_text(arg, f"{where}: 'command'") for arg in command),
+        paths=tuple(_path(p, "paths") for p in _list(entry.get("paths", ["**"]), "paths")),
+        reason=entry["reason"].strip(),
+        timeout=timeout,
+    )
+
+
+def _text(value: object, where: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        msg = f"{CONFIG.as_posix()}: {where} must be non-empty text"
+        raise ConfigError(msg)
+    return value
 
 
 def _allow(entry: object) -> Allow:
