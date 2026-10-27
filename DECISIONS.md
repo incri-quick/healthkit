@@ -265,8 +265,8 @@ mulearnbackend 55%), under the 70% slice 008 set for a rule that fails the gate.
 | M1 | Tool trial on QuickRPA backend: keep or drop each candidate | 1 day | done (slice 001) |
 | M2 | Core: diff filter, finding format, baseline, gate, report, replay harness | 3–4 days | mostly (slices 002-006); baseline file and reviewer-style report not built |
 | M3 | Python pack: ruff + Opengrep adapters, names-that-lie and error-handling rules | 3–4 days | partly: adapters + 2 rules; names-that-lie moved to the AI layer (D-021) |
-| M4 | Django pack + project packs (each project's own `.healthkit/`, D-022) | 3 days | partly: `.healthkit/` (slice 004); project checks + first Django rule **next** (slice 008) |
-| M5 | First replay score; first live run on Susheel's next module | 1 day | score done (slice 006); live run pending |
+| M4 | Django pack + project packs (each project's own `.healthkit/`, D-022) | 3 days | partly: `.healthkit/` (slice 004); project checks + `soft-delete-read` (advisory) done (slice 008) |
+| M5 | First replay score; first live run on Susheel's next module | 1 day | score done (slice 006); live run done (slice 009): 0 findings, recall needs a human review |
 | M6 | API pack: Schemathesis "never a 500" sweep | 2 days | done (slice 007): 6 real crashes in QuickRPA; database reset per run not built |
 | M7 | Module scorecard (pyscn + coverage per app) | 2 days | not started |
 | — | Anti-silencing (exit 3, `--isolated`, suppressions, `.gitattributes`) | not planned | done (slices 004-005) |
