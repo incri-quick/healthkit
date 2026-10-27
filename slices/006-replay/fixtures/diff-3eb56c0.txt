@@ -1,0 +1,11 @@
+diff --git a/studio_workflow/api/users.py b/studio_workflow/api/users.py
+index 55267eb..675d9af 100644
+--- a/studio_workflow/api/users.py
++++ b/studio_workflow/api/users.py
+@@ -427,0 +428,6 @@ def update_user(request, user_id: int, data: UserUpdate):
++    # Switching your own account off is the lock-out the deactivate door refuses
++    # (allow_self=False): there is no in-app way back. This edit was a side door
++    # to it (code review AA-48). Sending your current status back unchanged, as
++    # the Users page does on every save, is not a change and is allowed.
++    if _is_self(request.auth, user_id) and payload.get("is_active", user.is_active) != user.is_active:
++        raise HttpError(403, "You cannot deactivate your own account. Ask another administrator.")

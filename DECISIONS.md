@@ -183,6 +183,15 @@ match; helper modules and `__init__.py` are reviewed. Other frameworks' migratio
 folders (e.g. Alembic `migrations/versions/`) need one line in `.healthkit/config.toml`
 (D-004: Django first). Globs gained `[0-9]` / `[!0-9]` character classes.
 
+## D-020 First measured value — recorded (2026-10-27), answers D-008
+
+Replay on Susheel's users/auth review (slice 006): **9 of 45 findings caught (20%)** by
+rules not written from those incidents; 11/45 with them. Pattern findings 8 of 12; knowledge
+0 of 13; behaviour 1 of 15. Not fully out-of-sample (gate rules were chosen partly from the
+same fixes), so the next module Susheel reviews is the clean measurement. Next slices are
+ordered by this backlog: the f-string gap in `exception-text-in-reply` (small), then the
+API pack (catches AA-40, AA-73, AA-75 without a rule per bug).
+
 ---
 
 ## Open

@@ -5,6 +5,17 @@ Newest first.
 
 ---
 
+## L-016 Distrust the metric that looks good (2026-10-27)
+
+The replay's first metric, "a finding on a line the fix changed", gave 29/45. Reading
+the flagged lines showed most were coincidences: an unused import inside a behaviour
+fix, findings inside whole routes the fix deleted. Judged by whether the rule points at
+the problem itself: 9/45. Also found: the ruff gate rules were chosen (slice 001) partly
+by checking which hit these same fixes, so the replay is not fully out-of-sample.
+
+**Changed:** every automated score gets a by-hand read of its hits before it is quoted;
+selection data and test data are kept apart, and the next module is the clean test.
+
 ## L-015 Verifiers drift to what is easy to confirm (2026-10-27)
 
 Told which doors were already closed and asked to try new ones, the slice 005 verifier
