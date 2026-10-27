@@ -12,6 +12,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from healthkit.config import PROJECT_RULES
 from healthkit.findings import Finding, ToolError
 
 NAME = "opengrep"
@@ -33,14 +34,18 @@ def find_binary() -> list[str]:
 
 def run(root: Path, files: list[str]) -> list[Finding]:
     command = find_binary()
+    configs = ["--config", str(RULES)]
+    project_rules = root / PROJECT_RULES
+    if any(project_rules.glob("*.yaml")):  # the project's own rules (slice 004, D-002)
+        configs += ["--config", str(project_rules)]
     findings: list[Finding] = []
     for start in range(0, len(files), _BATCH):
-        findings += _run_batch(root, command, files[start : start + _BATCH])
+        findings += _run_batch(root, [*command, "scan", *configs], files[start : start + _BATCH])
     return findings
 
 
 def _run_batch(root: Path, command: list[str], files: list[str]) -> list[Finding]:
-    args = [*command, "scan", "--config", str(RULES), "--json", "-q", *files]
+    args = [*command, "--json", "-q", *files]
     try:
         result = subprocess.run(args, cwd=root, capture_output=True, check=False)  # noqa: S603
     except OSError as exc:

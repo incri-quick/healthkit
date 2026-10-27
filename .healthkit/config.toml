@@ -1,0 +1,5 @@
+# healthkit's own settings for reviewing itself.
+
+# The built-in rules' fixtures are deliberately bad code: their `# ruleid:` lines
+# exist to match (slice 003 known gap).
+exclude = ["src/healthkit/rules/*.py"]

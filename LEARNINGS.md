@@ -5,6 +5,33 @@ Newest first.
 
 ---
 
+## L-013 Read a verifier's "PASS" lines for what they imply (2026-10-27)
+
+The slice 004 verifier listed ".Healthkit capitalized → filesystem finds it
+(case-insensitive)" as a PASS. Followed through, it meant the config loads from a folder
+the approval check never looks at: an agent could allow everything with exit 0. The
+bypass was real, and it sat inside a line marked as passing.
+
+**Changed:** every verifier PASS is read as a claim about behaviour and asked "so what
+can an attacker do with this?"; surprising passes get a hand-run repro.
+
+## L-012 Mutants only mean something on green code (2026-10-27)
+
+A new test was failing (a wrong line number) when the mutants ran, so every mutant
+"failed a test" and looked caught. The result was worthless and was thrown away.
+
+**Changed:** the mutant run starts with the full suite on the real code; red there
+means stop, not continue.
+
+## L-011 `Path.write_text` on Windows writes CRLF (2026-10-27)
+
+A quick fix-up script rewrote three source files with `write_text`; Windows newline
+translation turned them into CRLF files. Nothing broke visibly, but a multi-line
+mutant pattern stopped matching. Same family as the BOM trap in QuickRPA memory.
+
+**Changed:** scripts that edit repo files use `read_bytes`/`write_bytes` (as
+`slices/mutate.py` does), and check line endings before commit.
+
 ## L-010 A verifier's "CONFIRMED" without output is an opinion (2026-10-26)
 
 The slice 003 verifier reported CONFIRMED and "production-ready" with no command

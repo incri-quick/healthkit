@@ -71,3 +71,18 @@ def changed_lines(root: Path, base: str) -> dict[str, set[int]]:
         f"{base}...HEAD",
     )
     return parse_changed_lines(diff)
+
+
+def files_touched_under(root: Path, base: str, folder: str) -> list[str]:
+    """Every file under `folder` the branch added, changed, renamed or DELETED.
+
+    Separate from changed_lines on purpose: a deleted rule file has no changed lines,
+    and deleting a rule must still reach a human (D-018).
+
+    Matched ignoring case: on Windows `.Healthkit/` is loaded as the config folder, so it
+    must be flagged too (slice 004 verifier finding). Not a git pathspec, which is
+    case-sensitive.
+    """
+    names = _git(root, "diff", "--name-only", "--no-renames", f"{base}...HEAD")
+    prefix = folder.casefold().rstrip("/") + "/"
+    return sorted(name for name in names.splitlines() if name.casefold().startswith(prefix))

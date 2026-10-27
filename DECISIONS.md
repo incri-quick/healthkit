@@ -138,6 +138,41 @@ A slice stays under about 300 lines of **source**. Tests do not count against it
 more tests are wanted, and the formatter spreads test fixtures over many lines.
 Slice 002 (208 source, 269 tests) is accepted under this rule.
 
+## D-017 What healthkit can and cannot catch — decided (2026-10-26)
+
+A rule is a past mistake written down so a machine can spot it again. It catches
+known kinds of mistakes, never new ones. Four kinds of problem:
+
+| Kind | Example | healthkit? | Cost of a rule |
+|---|---|---|---|
+| 1. Pattern (shape in one place) | `str(exc)` in a reply; raw `json.loads(request.body)` | yes (Opengrep) | about an hour with tests |
+| 2. Structure (who may import whom) | a service importing a route file | yes (import-linter) | minutes |
+| 3. Knowledge (needs the project's model) | soft-delete reads; `assert_perm` scope; protected-field `save()` | partly (Python guards) | a day or two each |
+| 4. Behaviour (does it do the right thing) | a reset link working as a login; a race; a misleading message | **no** | tests, QA, people |
+
+healthkit owns kinds 1-2, part of 3, never 4. Bugs nobody wrote a rule for are the job
+of other layers: tests, behaviour testing ("never a 500" catches unknown bugs without a
+rule per bug), advisory AI review, human review, production signals. Every escaped bug
+gets the question "could a rule or test have caught it?".
+
+healthkit never says "safe". It says what it checked and that it found no known problem.
+
+Consequence: the behaviour pack (Schemathesis "never a 500") moves up, right after
+slice 004.
+
+## D-018 Operating model: agents run it, humans approve what "correct" means — decided (2026-10-26)
+
+- **Run loop:** mostly AI coding agents run `healthkit review` before handing over and
+  fix their own findings. healthkit needs a machine-readable output for them (later
+  slice) alongside the human one.
+- **Learn loop:** when something escapes, an AI drafts a rule and fixtures from the real
+  case; the rule must fire on the incident and stay quiet on real code; **a human
+  approves it.**
+- **Separation of duties:** the agent that writes code must not be able to quietly
+  change the referee (allow entries, exclusions, rules, contracts): the "genie" /
+  reward-hacking risk. **Any change to `.healthkit/` is flagged for a human**, even when
+  everything else is clean.
+
 ---
 
 ## Open
@@ -157,5 +192,5 @@ Slice 002 (208 source, 269 tests) is accepted under this rule.
 | M3 | Python pack: ruff + Opengrep adapters, names-that-lie and error-handling rules | 3–4 days |
 | M4 | Django pack + QuickRPA project pack | 3 days |
 | M5 | First replay score; first live run on Susheel's next module | 1 day |
-| M6 | API pack: Schemathesis "never a 500" sweep | 2 days |
+| M6 | API pack: Schemathesis "never a 500" sweep (moved up by D-017: next after slice 004) | 2 days |
 | M7 | Module scorecard (pyscn + coverage per app) | 2 days |
