@@ -42,4 +42,5 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "src/healthkit/cli.py" = ["T201"]  # printing is the CLI's job
 "src/healthkit/apicheck.py" = ["T201"]  # a CLI command too
+"src/healthkit/routes.py" = ["T201"]  # a CLI command too
 "tests/**" = ["S101", "PLR2004", "ANN", "INP001", "S603", "S607"]

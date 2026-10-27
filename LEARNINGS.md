@@ -5,6 +5,17 @@ Newest first.
 
 ---
 
+## L-020 An incident's label is a claim too (2026-10-27)
+
+The replay's answer key called four routes "unused" (AA-35, AA-42, AA-58, AA-61). Checked
+against the clients as they were on each date, two were in use: the frontend called
+AA-35's `PATCH /users/change-password/`, and the agent's installer called AA-58's
+`POST /auth/login` until its own fix landed, six seconds after the backend's. A check
+built to "find all four" would have been built to be wrong.
+
+**Changed:** before an incident becomes a test, its ground truth is checked at the
+incident's date; the test asserts the truth, and the label's error is recorded.
+
 ## L-019 A negative result needs the same checking as a positive one (2026-10-27)
 
 Two runtime probes of `soft-delete-read` findings came back "not a bug": an archived robot

@@ -270,5 +270,7 @@ mulearnbackend 55%), under the 70% slice 008 set for a rule that fails the gate.
 | M6 | API pack: Schemathesis "never a 500" sweep | 2 days | done (slice 007): 6 real crashes in QuickRPA; database reset per run not built |
 | M7 | Module scorecard (pyscn + coverage per app) | 2 days | not started |
 | — | Anti-silencing (exit 3, `--isolated`, suppressions, `.gitattributes`) | not planned | done (slices 004-005) |
+| — | Routes nobody calls (D-021 step 4, part 1) | not planned | done (slice 010): 5/5 incident routes, 80-90% precision on QuickRPA |
+| — | Near-copies (D-021 step 4, part 2; D-015) | not planned | next (slice 011, measure first) |
 
 Revised order: D-021.
