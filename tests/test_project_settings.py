@@ -58,6 +58,18 @@ def test_migrations_are_excluded_by_default(repo, capsys):
     assert "excluded: 1 file(s)" in out
 
 
+def test_real_code_in_a_migrations_folder_is_still_reviewed(repo, capsys):
+    # QuickRPA users/migrations/_inert_permissions.py: 99 lines of real code, imported by
+    # tests, hidden by the old "everything under migrations/" default (slice 005).
+    repo.write("users/migrations/_inert_permissions.py", "x = 1\n")
+    base = repo.commit("base")
+    repo.write("users/migrations/_inert_permissions.py", "x = 1\nimport os\n")
+    repo.commit()
+
+    assert review(base) == 1
+    assert "users/migrations/_inert_permissions.py:2: [ruff F401]" in capsys.readouterr().out
+
+
 def test_an_allowed_finding_is_counted_not_printed(repo, capsys):
     repo.write(".healthkit/config.toml", ALLOW_READER)
     repo.write("commons/payload.py", "x = 1\n")

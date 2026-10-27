@@ -66,6 +66,10 @@ def changed_lines(root: Path, base: str) -> dict[str, set[int]]:
         "--unified=0",
         "--no-color",
         "--no-ext-diff",
+        # A branch's own .gitattributes (binary, -diff, a textconv driver) could otherwise
+        # make its changes show no lines at all: "nothing to review", exit 0 (slice 005).
+        "--text",
+        "--no-textconv",
         "-M",
         "--diff-filter=AMR",
         f"{base}...HEAD",

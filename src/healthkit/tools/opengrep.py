@@ -45,7 +45,9 @@ def run(root: Path, files: list[str]) -> list[Finding]:
 
 
 def _run_batch(root: Path, command: list[str], files: list[str]) -> list[Finding]:
-    args = [*command, "--json", "-q", *files]
+    # --disable-nosem: `# nosemgrep` results come back marked is_ignored (measured in
+    # slice 005), so one run tells us what was suppressed.
+    args = [*command, "--json", "-q", "--disable-nosem", *files]
     try:
         result = subprocess.run(args, cwd=root, capture_output=True, check=False)  # noqa: S603
     except OSError as exc:
@@ -74,4 +76,5 @@ def _to_finding(item: dict) -> Finding:
         path=item["path"].replace("\\", "/"),
         line=item["start"]["line"],
         message=" ".join(item["extra"]["message"].split()),
+        suppressed=bool(item["extra"].get("is_ignored")),
     )

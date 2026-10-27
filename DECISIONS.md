@@ -173,6 +173,16 @@ slice 004.
   reward-hacking risk. **Any change to `.healthkit/` is flagged for a human**, even when
   everything else is clean.
 
+## D-019 Default exclusion: Django-named migrations only — decided (2026-10-27), supersedes slice 004 decision 3
+
+The default was everything under `migrations/`. An agent could put real code there and
+the gate would never see it (found by hand in slice 005); QuickRPA already has one such
+file, `users/migrations/_inert_permissions.py` (99 lines, real code). The default is now
+`**/migrations/[0-9][0-9][0-9][0-9]_*.py`: all 205 of QuickRPA's generated migrations
+match; helper modules and `__init__.py` are reviewed. Other frameworks' migration
+folders (e.g. Alembic `migrations/versions/`) need one line in `.healthkit/config.toml`
+(D-004: Django first). Globs gained `[0-9]` / `[!0-9]` character classes.
+
 ---
 
 ## Open

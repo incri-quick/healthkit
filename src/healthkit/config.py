@@ -19,8 +19,10 @@ if TYPE_CHECKING:
 HOME = Path(".healthkit")
 CONFIG = HOME / "config.toml"
 PROJECT_RULES = HOME / "rules"
-# Generated migrations (slice 002 false alarms) and the referee's own files.
-DEFAULT_EXCLUDE = ("**/migrations/**", ".healthkit/**")
+# Generated Django migrations only (slice 002 false alarms), by their NNNN_ names: real
+# code placed in a migrations folder is still reviewed (slice 005, D-019). And the
+# referee's own files.
+DEFAULT_EXCLUDE = ("**/migrations/[0-9][0-9][0-9][0-9]_*.py", ".healthkit/**")
 _TOP_KEYS = {"exclude", "allow"}
 _ALLOW_KEYS = {"rule", "path", "reason"}
 
@@ -103,6 +105,16 @@ def glob_match(path: str, pattern: str) -> bool:
 
 @cache
 def _glob_regex(pattern: str) -> re.Pattern[str]:
-    parts = re.split(r"(\*\*/|/\*\*|\*\*|\*|\?)", pattern)
+    parts = re.split(r"(\*\*/|/\*\*|\*\*|\*|\?|\[!?[^\]/]+\])", pattern)
     tokens = {"**/": "(?:.*/)?", "/**": "(?:/.*)?", "**": ".*", "*": "[^/]*", "?": "[^/]"}
-    return re.compile("".join(tokens.get(part, re.escape(part)) for part in parts))
+    return re.compile("".join(tokens.get(part, _literal_or_class(part)) for part in parts))
+
+
+def _literal_or_class(part: str) -> str:
+    """`[0-9]` and `[!0-9]` are character classes (never matching "/"); the rest is literal."""
+    if len(part) > 2 and part[0] == "[" and part[-1] == "]":  # noqa: PLR2004 - "[x]" is 3+ chars
+        body = part[1:-1]
+        negate = body.startswith("!")
+        body = re.escape(body.removeprefix("!")).replace(r"\-", "-")
+        return f"[^/{body}]" if negate else f"[{body}]"
+    return re.escape(part)

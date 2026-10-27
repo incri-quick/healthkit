@@ -2,4 +2,9 @@
 
 # The built-in rules' fixtures are deliberately bad code: their `# ruleid:` lines
 # exist to match (slice 003 known gap).
-exclude = ["src/healthkit/rules/*.py"]
+exclude = [
+    "src/healthkit/rules/*.py",
+    # Trial evidence and measurement scripts, not toolkit code. Was excluded through
+    # pyproject's ruff settings, which the gate no longer reads (slice 005).
+    "slices/**",
+]

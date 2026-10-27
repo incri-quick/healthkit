@@ -22,6 +22,16 @@ from healthkit.config import ConfigError, glob_match
         (".healthkit/rules/no-local-workspace-lookup.py", ".healthkit/**", True),
         ("commons/payload.py", "commons/payload.py", True),
         ("Bot Starter Kit/app/bot.py", "Bot Starter Kit/**", True),
+        # Character classes (slice 005: Django-named migrations only).
+        ("users/migrations/0037_nulls.py", "**/migrations/[0-9][0-9][0-9][0-9]_*.py", True),
+        (
+            "users/migrations/_inert_permissions.py",
+            "**/migrations/[0-9][0-9][0-9][0-9]_*.py",
+            False,
+        ),
+        ("users/migrations/__init__.py", "**/migrations/[0-9][0-9][0-9][0-9]_*.py", False),
+        ("a/b.py", "a/[!0-9].py", True),
+        ("a/1.py", "a/[!0-9].py", False),
     ],
 )
 def test_glob(path, pattern, expected):

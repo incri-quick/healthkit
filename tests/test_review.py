@@ -102,8 +102,9 @@ def test_a_type_stub_file_is_reviewed_too(repo, capsys):
     assert "types.pyi:1: [ruff F401]" in capsys.readouterr().out
 
 
-def test_the_projects_own_ruff_excludes_are_respected(repo, capsys):
-    # Found in slice 003: files passed explicitly made ruff ignore the project's excludes.
+def test_the_projects_own_ruff_settings_cannot_hide_a_finding(repo, capsys):
+    # Reverses slice 003's --force-exclude (slice 005, decision 1): a project ruff exclude
+    # was one of three ways to silence the gate. Exclusions belong in .healthkit/ only.
     repo.write("pyproject.toml", '[tool.ruff]\nextend-exclude = ["generated"]\n')
     repo.write("app.py", "x = 1\n")
     base = repo.commit("base")
@@ -111,11 +112,23 @@ def test_the_projects_own_ruff_excludes_are_respected(repo, capsys):
     repo.write("app.py", "x = 1\nimport os\n")
     repo.commit()
 
-    review(base)
-
+    assert review(base) == 1
     out = capsys.readouterr().out
     assert "app.py:2: [ruff F401]" in out
-    assert "generated/client.py" not in out
+    assert "generated/client.py:1: [ruff F401]" in out
+
+
+def test_the_projects_per_file_ignores_cannot_hide_a_finding(repo, capsys):
+    # Measured in slice 005: per-file-ignores in pyproject hides a finding even for files
+    # passed explicitly, unless ruff runs --isolated (the mutant that removed it survived).
+    repo.write("pyproject.toml", '[tool.ruff.lint.per-file-ignores]\n"app.py" = ["F401"]\n')
+    repo.write("app.py", "x = 1\n")
+    base = repo.commit("base")
+    repo.write("app.py", "x = 1\nimport os\n")
+    repo.commit()
+
+    assert review(base) == 1
+    assert "app.py:2: [ruff F401]" in capsys.readouterr().out
 
 
 def test_outside_a_git_repo_is_an_error(tmp_path, monkeypatch, capsys):

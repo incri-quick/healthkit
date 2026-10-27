@@ -54,14 +54,20 @@ def _review(cwd: Path, base: str) -> int:
         for f in run.findings
         if f.line in changed.get(f.path, set()) and not settings.is_excluded(f.path)
     ]
-    new = sorted(
+    not_allowed = sorted(
         (f for f in on_changed_lines if not settings.allows(f)),
         key=lambda f: (f.path, f.line, f.tool, f.rule),
     )
+    new = [f for f in not_allowed if not f.suppressed]
+    suppressed = [f for f in not_allowed if f.suppressed]
     for finding in new:
         print(finding.render())
-    for path in referee_changes:  # D-018: the referee changed; a person must approve
-        print(f"needs human approval: {path}")
+    # D-018: the referee changed, or a check was switched off inline. A person decides.
+    approvals = [f"{path}" for path in referee_changes] + [
+        f"{f.path}:{f.line} suppresses {f.tool} {f.rule}" for f in suppressed
+    ]
+    for item in approvals:
+        print(f"needs human approval: {item}")
 
     if not reviewed:
         summary = "healthkit: nothing to review (no changed Python files)"
@@ -75,16 +81,16 @@ def _review(cwd: Path, base: str) -> int:
     parts += [f"skipped: {'; '.join(run.skipped)}"] if run.skipped else []
     excluded = len(python_files) - len(reviewed)
     parts += [f"excluded: {excluded} file(s)"] if excluded else []
-    allowed = len(on_changed_lines) - len(new)
+    allowed = len(on_changed_lines) - len(not_allowed)
     parts += [f"allowed: {allowed}"] if allowed else []
-    parts += [f"needs human approval: {len(referee_changes)} file(s)"] if referee_changes else []
+    parts += [f"needs human approval: {len(approvals)} item(s)"] if approvals else []
     print(" | ".join(parts))
 
     if run.failed:
         return 2
     if new:
         return 1
-    return 3 if referee_changes else 0
+    return 3 if approvals else 0
 
 
 def _run_tools(root: Path, files: list[str]) -> _Run:

@@ -1,7 +1,13 @@
-"""ruff adapter. Rules are listed explicitly: ruff's defaults change between versions (L-002)."""
+"""ruff adapter. Rules are listed explicitly: ruff's defaults change between versions (L-002).
+
+The project's own ruff settings are ignored (`--isolated`): they could switch the gate off
+(slice 005). Suppressions are found by running twice, honouring `# noqa` and ignoring it;
+what only the second run reports was suppressed. ruff's own noqa rules decide.
+"""
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import subprocess
 from pathlib import Path
@@ -18,14 +24,21 @@ _BATCH = 200  # keep each command line short (Windows limit)
 def run(root: Path, files: list[str]) -> list[Finding]:
     findings: list[Finding] = []
     for start in range(0, len(files), _BATCH):
-        findings += _run_batch(root, files[start : start + _BATCH])
+        batch = files[start : start + _BATCH]
+        honoured = set(_check(root, batch))
+        everything = _check(root, batch, "--ignore-noqa")
+        findings += honoured
+        findings += [
+            dataclasses.replace(f, suppressed=True) for f in everything if f not in honoured
+        ]
     return findings
 
 
-def _run_batch(root: Path, files: list[str]) -> list[Finding]:
+def _check(root: Path, files: list[str], *extra: str) -> list[Finding]:
     args = [
         *COMMAND,
         "check",
+        "--isolated",
         "--no-cache",
         "--preview",
         "--select",
@@ -33,7 +46,7 @@ def _run_batch(root: Path, files: list[str]) -> list[Finding]:
         "--output-format",
         "json",
         "--exit-zero",
-        "--force-exclude",  # files passed explicitly would otherwise bypass the project's excludes
+        *extra,
         *files,
     ]
     try:

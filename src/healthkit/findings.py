@@ -12,6 +12,9 @@ class Finding:
     path: str  # repo-relative, forward slashes
     line: int
     message: str
+    # Hidden by an inline comment (`# noqa`, `# nosemgrep`), detected with the tool's own
+    # rules. On a changed line it needs a human, never a pass (slice 005, D-018).
+    suppressed: bool = False
 
     def render(self) -> str:
         return f"{self.path}:{self.line}: [{self.tool} {self.rule}] {self.message}"

@@ -5,6 +5,26 @@ Newest first.
 
 ---
 
+## L-015 Verifiers drift to what is easy to confirm (2026-10-27)
+
+Told which doors were already closed and asked to try new ones, the slice 005 verifier
+re-tested the closed doors, numbered its attempts 7-12, and reported nothing for the
+new ideas. The first new idea run by hand (`.gitattributes`) was a total bypass.
+
+**Changed:** a verification brief names the cases that must be attempted; the report is
+checked case by case against that list, and missing cases are run by hand before any
+verdict is accepted. Adversarial checks of the gate itself stay with a human-run repro.
+
+## L-014 A test can guard the wrong door (2026-10-27)
+
+The test "project ruff excludes cannot hide a finding" passed with and without
+`--isolated`: naming files explicitly already defeats `extend-exclude`. The mutant that
+removed `--isolated` survived, and measuring showed the setting it really blocks is
+`per-file-ignores`, which no test covered.
+
+**Changed:** when a mutant survives, measure what the mutated line actually protects
+before writing the missing test.
+
 ## L-013 Read a verifier's "PASS" lines for what they imply (2026-10-27)
 
 The slice 004 verifier listed ".Healthkit capitalized → filesystem finds it
