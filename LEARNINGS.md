@@ -5,6 +5,17 @@ Newest first.
 
 ---
 
+## L-017 A sweep that writes data changes what the next sweep can find (2026-10-27)
+
+The second QuickRPA API sweep, same tool and settings, reported 4 crashes instead of 6.
+Neither bug was fixed: the first sweep had deactivated the user one crashing input hit
+and cleared the pending MFA setup the other needed. Replayed by hand with the right
+state, both still answered 500 (`IntegrityError`, `TypeError`).
+
+**Changed:** fewer API findings never means "fixed" until each missing one is replayed;
+any before/after comparison of API runs needs the same starting data (a database
+snapshot restored before each run).
+
 ## L-016 Distrust the metric that looks good (2026-10-27)
 
 The replay's first metric, "a finding on a line the fix changed", gave 29/45. Reading

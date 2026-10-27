@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from healthkit import config, gitdiff
+from healthkit import apicheck, config, gitdiff
 from healthkit.findings import Finding, ToolError, ToolSkipped
 from healthkit.tools import importlinter, opengrep, ruff
 
@@ -24,7 +24,10 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     review = commands.add_parser("review", help="check the lines this branch changed")
     review.add_argument("--base", required=True, help="branch or commit to compare against")
+    apicheck.add_parser(commands)
     args = parser.parse_args(argv)
+    if args.command == "api":
+        return apicheck.run(args)
     return _review(Path.cwd(), args.base)
 
 

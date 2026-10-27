@@ -234,9 +234,9 @@ scoring them on the 45 they came from would be circular.
 | M1 | Tool trial on QuickRPA backend: keep or drop each candidate | 1 day | done (slice 001) |
 | M2 | Core: diff filter, finding format, baseline, gate, report, replay harness | 3–4 days | mostly (slices 002-006); baseline file and reviewer-style report not built |
 | M3 | Python pack: ruff + Opengrep adapters, names-that-lie and error-handling rules | 3–4 days | partly: adapters + 2 rules; names-that-lie moved to the AI layer (D-021) |
-| M4 | Django pack + QuickRPA project pack | 3 days | partly: `.healthkit/` (slice 004); knowledge rules next-but-one (D-021) |
+| M4 | Django pack + QuickRPA project pack | 3 days | partly: `.healthkit/` (slice 004); knowledge rules **next** (D-021) |
 | M5 | First replay score; first live run on Susheel's next module | 1 day | score done (slice 006); live run pending |
-| M6 | API pack: Schemathesis "never a 500" sweep | 2 days | **next** (D-021) |
+| M6 | API pack: Schemathesis "never a 500" sweep | 2 days | done (slice 007): 6 real crashes in QuickRPA; database reset per run not built |
 | M7 | Module scorecard (pyscn + coverage per app) | 2 days | not started |
 | — | Anti-silencing (exit 3, `--isolated`, suppressions, `.gitattributes`) | not planned | done (slices 004-005) |
 
