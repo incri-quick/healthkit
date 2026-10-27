@@ -13,6 +13,7 @@ standard that need understanding. Three levels:
 1. **Form** (case, layout, imports): already solved by ruff. Adopt, do not build.
 2. **Meaning** (names that tell the truth, `get_` has no side effects, booleans
    read as questions, no flag arguments): unsolved. healthkit's first target.
+   *(Priority superseded by D-021: meaning moves to the advisory AI layer.)*
 3. **Team conventions** (use the shared function, follow the house pattern, no
    copies of a rule): unsolved and project-specific. Where the costly bugs were.
 
@@ -192,6 +193,30 @@ same fixes), so the next module Susheel reviews is the clean measurement. Next s
 ordered by this backlog: the f-string gap in `exception-text-in-reply` (small), then the
 API pack (catches AA-40, AA-73, AA-75 without a rule per bug).
 
+## D-021 The plan, revised by evidence — decided (2026-10-27), supersedes D-001's priority
+
+The replay (D-020) showed where the value is. Of Susheel's 45 findings: 13 knowledge
+(copies of shared code, token types, unused routes), 15 behaviour (3 of them 500s), 12
+pattern, 4 judgement/naming. Rules caught 8 of 12 pattern and 0 of 4 naming. D-001 named
+"names that lie" the first target; nobody chose to drop it, the work simply went
+elsewhere. This records the change instead of letting it happen silently.
+
+New order:
+
+1. **API pack** ("never a 500"): catches bad-input crashes without a rule per bug.
+   The f-string gap in `exception-text-in-reply` rides along.
+2. **QuickRPA knowledge pack**: soft-delete reads, `assert_perm` scope, protected-field
+   `save()`, token reads outside their door: where QuickRPA's real bugs have been.
+3. **Live run on Susheel's next module**: the clean, out-of-sample measurement.
+4. Near-copy detection (D-015) and an unused-route check.
+5. **"Names that lie" moves from the gate to the advisory AI layer**: a rule cannot judge
+   meaning reliably (0 of 4 in the replay).
+6. Still pending, unchanged: baseline file, reviewer-style + machine-readable output,
+   module scorecard.
+
+Gains from rules written using the replay's misses are measured on new code only;
+scoring them on the 45 they came from would be circular.
+
 ---
 
 ## Open
@@ -201,15 +226,18 @@ API pack (catches AA-40, AA-73, AA-75 without a rule per bug).
   plus a manual command.
 - **O-5 Windows support of Opengrep.** Answered by slice 001 (the tool trial).
 
-## Build plan (estimates, one person)
+## Build plan (original estimates, one person; status as of 2026-10-27)
 
-| Step | What | Time |
-|---|---|---|
-| M0 | Design doc + repo skeleton; settle O-1..O-5 | 1 day |
-| M1 | Tool trial on QuickRPA backend: keep or drop each candidate | 1 day |
-| M2 | Core: diff filter, finding format, baseline, gate, report, replay harness | 3–4 days |
-| M3 | Python pack: ruff + Opengrep adapters, names-that-lie and error-handling rules | 3–4 days |
-| M4 | Django pack + QuickRPA project pack | 3 days |
-| M5 | First replay score; first live run on Susheel's next module | 1 day |
-| M6 | API pack: Schemathesis "never a 500" sweep (moved up by D-017: next after slice 004) | 2 days |
-| M7 | Module scorecard (pyscn + coverage per app) | 2 days |
+| Step | What | Time | Status |
+|---|---|---|---|
+| M0 | Design doc + repo skeleton; settle O-1..O-5 | 1 day | done |
+| M1 | Tool trial on QuickRPA backend: keep or drop each candidate | 1 day | done (slice 001) |
+| M2 | Core: diff filter, finding format, baseline, gate, report, replay harness | 3–4 days | mostly (slices 002-006); baseline file and reviewer-style report not built |
+| M3 | Python pack: ruff + Opengrep adapters, names-that-lie and error-handling rules | 3–4 days | partly: adapters + 2 rules; names-that-lie moved to the AI layer (D-021) |
+| M4 | Django pack + QuickRPA project pack | 3 days | partly: `.healthkit/` (slice 004); knowledge rules next-but-one (D-021) |
+| M5 | First replay score; first live run on Susheel's next module | 1 day | score done (slice 006); live run pending |
+| M6 | API pack: Schemathesis "never a 500" sweep | 2 days | **next** (D-021) |
+| M7 | Module scorecard (pyscn + coverage per app) | 2 days | not started |
+| — | Anti-silencing (exit 3, `--isolated`, suppressions, `.gitattributes`) | not planned | done (slices 004-005) |
+
+Revised order: D-021.
