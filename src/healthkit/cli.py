@@ -13,12 +13,13 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from healthkit import apicheck, baseline, checks, config, gitdiff, routes
+from healthkit import apicheck, baseline, checks, config, gitdiff, report, routes
 from healthkit.findings import Finding, ToolError, ToolSkipped
 from healthkit.tools import codespell, copies, django, importlinter, opengrep, options, ruff
 
 GATE_TOOLS = (ruff, opengrep, importlinter, django, copies, codespell, options)  # D-014
 BASELINE = "remember today's findings in these folders, so only new ones show"
+FORMAT = "text (default), json (AI, scripts), markdown (a PR comment), github (Actions)"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -26,9 +27,11 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     review = commands.add_parser("review", help="check the lines this branch changed")
     review.add_argument("--base", required=True, help="branch or commit to compare against")
+    review.add_argument("--format", choices=report.FORMATS, default="text", help=FORMAT)
     for name, text in (("scan", "check every line of these folders"), ("baseline", BASELINE)):
         command = commands.add_parser(name, help=text)
         command.add_argument("folders", nargs="*", default=["."], help="default: the repo")
+        command.add_argument("--format", choices=report.FORMATS, default="text", help=FORMAT)
     apicheck.add_parser(commands)
     routes.add_parser(commands)
     args = parser.parse_args(argv)
@@ -37,8 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "routes":
         return routes.run(args)
     if args.command in {"scan", "baseline"}:
-        return _scan(Path.cwd(), args.folders, write=args.command == "baseline")
-    return _review(Path.cwd(), args.base)
+        return _scan(Path.cwd(), args.folders, write=args.command == "baseline", fmt=args.format)
+    return _review(Path.cwd(), args.base, args.format)
 
 
 @dataclass
@@ -49,7 +52,7 @@ class _Run:
     failed: bool = False
 
 
-def _review(cwd: Path, base: str) -> int:
+def _review(cwd: Path, base: str, fmt: str = "text") -> int:
     try:
         root = gitdiff.repo_root(cwd)
         changed = gitdiff.changed_lines(root, base)
@@ -78,14 +81,14 @@ def _review(cwd: Path, base: str) -> int:
     )
     suppressed = [f for f in not_allowed if f.suppressed]
     shown, remembered, _ = baseline.split(root, [f for f in not_allowed if not f.suppressed], known)
-    new, advisory = _print(shown)
-    new += _report_checks(project, run)
+    problems = [f for f in shown if not f.advisory]
+    advisory = [f for f in shown if f.advisory]
+    failed_checks = _merge_checks(project, run)
+    new = problems + failed_checks
     # D-018: the referee changed, or a check was switched off inline. A person decides.
     approvals = [f"{path}" for path in referee_changes] + [
         f"{f.path}:{f.line} suppresses {f.tool} {f.rule}" for f in suppressed
     ]
-    for item in approvals:
-        print(f"needs human approval: {item}")
 
     if not reviewed and not new:
         summary = "healthkit: nothing to review (no changed Python files)"
@@ -104,16 +107,13 @@ def _review(cwd: Path, base: str) -> int:
     parts += [f"worth a look: {len(advisory)}"] if advisory else []
     parts += [f"baselined: {remembered}"] if remembered else []
     parts += [f"needs human approval: {len(approvals)} item(s)"] if approvals else []
-    print(" | ".join(parts))
-
-    if run.failed:
-        return 2
-    if new:
-        return 1
-    return 3 if approvals else 0
+    code = 2 if run.failed else 1 if new else 3 if approvals else 0
+    result = report.Report("review", code, parts, problems, advisory, failed_checks)
+    result.tails, result.approvals = project.tails, approvals
+    return report.emit(result, fmt)
 
 
-def _scan(cwd: Path, folders: list[str], *, write: bool) -> int:
+def _scan(cwd: Path, folders: list[str], *, write: bool, fmt: str = "text") -> int:
     """Every line of the Python files in `folders`. Never runs project commands: there is
     no base branch to take them from (slice 012)."""
     try:
@@ -125,8 +125,8 @@ def _scan(cwd: Path, folders: list[str], *, write: bool) -> int:
         print(f"healthkit: {exc}", file=sys.stderr)
         return 2
     if not files:
-        print(f"healthkit scan: 0 Python files in {', '.join(folders)}")
-        return 0
+        nothing = f"healthkit scan: 0 Python files in {', '.join(folders)}"
+        return report.emit(report.Report("scan", 0, [nothing]), fmt)
     run = _run_tools(root, sorted(files))
     found = sorted(
         (f for f in run.findings if f.path in files and not settings.allows(f)),
@@ -142,7 +142,8 @@ def _scan(cwd: Path, folders: list[str], *, write: bool) -> int:
         print(f"healthkit: baseline written: {len(kept)} finding(s) in {len(files)} file(s)")
         return 0
     shown, remembered, gone = baseline.split(root, kept, known, files)
-    new, advisory = _print(shown)
+    new = [f for f in shown if not f.advisory]
+    advisory = [f for f in shown if f.advisory]
     verdict = f"{len(new)} finding(s)" if new else "no known problems"
     parts = [f"healthkit scan: {verdict} in {len(files)} file(s)", f"ran: {', '.join(run.ran)}"]
     parts += [f"skipped: {'; '.join(run.skipped)}"] if run.skipped else []
@@ -151,8 +152,8 @@ def _scan(cwd: Path, folders: list[str], *, write: bool) -> int:
     parts += [f"suppressed: {suppressed}"] if suppressed else []
     parts += [f"baselined: {remembered}"] if remembered else []
     parts += [f"fixed since the baseline: {gone}"] if gone else []
-    print(" | ".join(parts))
-    return 2 if run.failed else (1 if new else 0)
+    code = 2 if run.failed else (1 if new else 0)
+    return report.emit(report.Report("scan", code, parts, new, advisory), fmt)
 
 
 def _python_files(root: Path, cwd: Path, folders: list[str], settings: config.Settings) -> set[str]:
@@ -173,28 +174,14 @@ def _python_files(root: Path, cwd: Path, folders: list[str], settings: config.Se
     return files
 
 
-def _print(findings: list[Finding]) -> tuple[list[Finding], list[Finding]]:
-    """Print blocking findings, then advisory ones; return both lists."""
-    new = [f for f in findings if not f.advisory]
-    advisory = [f for f in findings if f.advisory]
-    for finding in new:
-        print(finding.render())
-    for finding in advisory:
-        print(f"worth a look: {finding.render()}")
-    return new, advisory
-
-
-def _report_checks(project: checks.CheckRun, run: _Run) -> list[Finding]:
-    """Print the project checks' results (whole-project, not tied to a changed line)."""
+def _merge_checks(project: checks.CheckRun, run: _Run) -> list[Finding]:
+    """Fold the project checks into the run; return the failed ones (whole-project, not
+    tied to a changed line). Errors go to stderr in every format."""
     run.ran += project.ran
     run.skipped += project.skipped
     for error in project.errors:
         print(f"healthkit: {error}", file=sys.stderr)
     run.failed = run.failed or bool(project.errors)
-    for finding in project.findings:
-        print(finding.render())
-        for line in project.tails[finding.rule]:
-            print(f"    {line}")
     return project.findings
 
 

@@ -33,6 +33,20 @@ Run them from inside the project's git repository.
 | `healthkit api --schema <url> --token-env TOKEN_A` | Sends good and bad input to every API route; any server error (500) is a finding. Give `--token-env` twice (two users, ideally in different organisations) and it also checks that one user cannot read the other's objects. Local servers only. |
 | `healthkit routes --schema <url> --callers <folder>` | Lists API routes that no client code calls. |
 
+### Output formats
+
+`review` and `scan` take `--format`:
+
+- `text` (default): for a person at a terminal.
+- `json`: for an AI assistant or a script. One object: `exit`, `summary`, `details`,
+  `findings` (each with `kind`: `problem`, `worth a look` or `check`), `approvals`.
+- `markdown`: a pull-request comment. healthkit never posts anything; you do:
+  `healthkit review --base main --format markdown > review.md` then
+  `gh pr comment <number> -F review.md`.
+- `github`: annotations that GitHub Actions shows inline on the pull request.
+
+Exit codes are the same in every format. Machine formats are always UTF-8.
+
 ### What the results mean
 
 - `path:line: [tool rule] message`: a problem. Fix it, or explain it (see "Exceptions").
@@ -96,7 +110,7 @@ Kinds: `pattern` (visible in the shape of the code), `structure` (who imports wh
 
 When asked to check a module with healthkit:
 
-1. Run `healthkit scan <folder>`. Read the whole output, including the summary line.
+1. Run `healthkit scan <folder> --format json`. Read every finding and the summary.
 2. If the exit code is **2**, stop and report what could not run. Never report a pass.
 3. Group the findings by rule; say how many of each, then list the ones that matter most.
    `worth a look` findings are hints: read the code before calling one real.
