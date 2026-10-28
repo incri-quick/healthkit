@@ -23,6 +23,11 @@ PROJECT_RULES = HOME / "rules"
 # code placed in a migrations folder is still reviewed (slice 005, D-019). And the
 # referee's own files.
 DEFAULT_EXCLUDE = ("**/migrations/[0-9][0-9][0-9][0-9]_*.py", ".healthkit/**")
+# Python test files by the usual conventions: checks about runtime code skip them (they
+# read deleted rows, copy helpers, on purpose). Slices 008 and 011.
+TEST_FILE = re.compile(
+    r"(?:^|/)(?:tests?/|tests?(?:_[^/]*)?\.py$|test_[^/]*\.py$|[^/]*_tests?\.py$)"
+)
 _TOP_KEYS = {"exclude", "allow", "check", "django"}
 _ALLOW_KEYS = {"rule", "path", "reason"}
 _CHECK_KEYS = {"name", "command", "paths", "reason", "timeout"}

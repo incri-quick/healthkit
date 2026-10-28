@@ -5,6 +5,27 @@ Newest first.
 
 ---
 
+## L-022 Measure before building can mean building less (2026-10-28)
+
+Slice 011 was planned as near-copy detection. Measuring four matchers on the real cases
+first showed the expensive one (a similarity engine) found 1 of 4, and that most incidents
+were not copies in shape: one was a race pattern, one was the same steps in other code.
+Asked "is it worth it?", the answer was to ship two cheap checks (~110 lines) and drop the
+engine. The cheap checks then found a live bug no review had named (the vault decrypt
+throttle) and a security helper copied with opposite behaviour (`_client_ip`).
+
+**Changed:** a slice's measurement step ends with an explicit verdict (worth it / not /
+smaller), stated before any design is offered.
+
+## L-021 A tool's own test command can pass with nothing to test (2026-10-28)
+
+`opengrep test` passed a rule fixture file whose rule did not exist yet: it skips a
+fixture with no rule beside it. The built-in rules test could never fail for a missing or
+misnamed rule.
+
+**Changed:** a test now requires every fixture to have its rule; each new rule also gets a
+review-level test that fails without it.
+
 ## L-020 An incident's label is a claim too (2026-10-27)
 
 The replay's answer key called four routes "unused" (AA-35, AA-42, AA-58, AA-61). Checked

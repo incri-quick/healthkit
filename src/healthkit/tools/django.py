@@ -35,9 +35,7 @@ _PROJECTIONS = {"values", "values_list"}
 _BY_NAME = {"get_object_or_404", "get_list_or_404"}
 # Tests and one-off admin scripts read deleted rows on purpose (QuickRPA hand-read).
 _NOT_CHECKED = re.compile(r"(?:^|/)management/commands/")
-_TEST_FILE = re.compile(
-    r"(?:^|/)(?:tests?/|tests?(?:_[^/]*)?\.py$|test_[^/]*\.py$|[^/]*_tests?\.py$)"
-)
+_TEST_FILE = config.TEST_FILE
 
 
 @dataclass

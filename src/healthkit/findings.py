@@ -19,6 +19,12 @@ class Finding:
     # Shown for a person to look at, never a failed gate: a rule below the precision a
     # blocking rule needs (slice 008: soft-delete-read, about half real on unseen code).
     advisory: bool = False
+    # A finding about a whole function covers its lines: a change anywhere in it counts
+    # (slice 011: copies drift through body edits). 0 means the one line above.
+    end_line: int = 0
+
+    def touches(self, lines: set[int]) -> bool:
+        return any(n in lines for n in range(self.line, max(self.line, self.end_line) + 1))
 
     def render(self) -> str:
         return f"{self.path}:{self.line}: [{self.tool} {self.rule}] {self.message}"

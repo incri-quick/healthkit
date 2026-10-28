@@ -14,9 +14,9 @@ from pathlib import Path
 
 from healthkit import apicheck, checks, config, gitdiff, routes
 from healthkit.findings import Finding, ToolError, ToolSkipped
-from healthkit.tools import django, importlinter, opengrep, ruff
+from healthkit.tools import copies, django, importlinter, opengrep, ruff
 
-GATE_TOOLS = (ruff, opengrep, importlinter, django)  # D-014: the pre-push gate
+GATE_TOOLS = (ruff, opengrep, importlinter, django, copies)  # D-014: the pre-push gate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -62,7 +62,7 @@ def _review(cwd: Path, base: str) -> int:
     on_changed_lines = [
         f
         for f in run.findings
-        if f.line in changed.get(f.path, set()) and not settings.is_excluded(f.path)
+        if f.touches(changed.get(f.path, set())) and not settings.is_excluded(f.path)
     ]
     not_allowed = sorted(
         (f for f in on_changed_lines if not settings.allows(f)),

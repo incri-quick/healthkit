@@ -133,6 +133,10 @@ pyscn found only exact copies. The tenancy helper `_get_workspace_or_404` exists
 modules, not by any trialled tool. Candidates: same-name functions across modules,
 and project rules that require the shared function.
 
+**Answered by slice 011 (2026-10-28):** measured four matchers on the real cases; only the
+same-name search finds drifted copies, so it ships (`copy-same-name`, advisory). Shape
+similarity (outside tools and healthkit's own) sees exact copies only and was dropped.
+
 ## D-016 Slice budget counts source, not tests — decided (2026-10-26)
 
 A slice stays under about 300 lines of **source**. Tests do not count against it:
@@ -271,6 +275,6 @@ mulearnbackend 55%), under the 70% slice 008 set for a rule that fails the gate.
 | M7 | Module scorecard (pyscn + coverage per app) | 2 days | not started |
 | — | Anti-silencing (exit 3, `--isolated`, suppressions, `.gitattributes`) | not planned | done (slices 004-005) |
 | — | Routes nobody calls (D-021 step 4, part 1) | not planned | done (slice 010): 5/5 incident routes, 80-90% precision on QuickRPA |
-| — | Near-copies (D-021 step 4, part 2; D-015) | not planned | next (slice 011, measure first) |
+| — | Copies (D-021 step 4, part 2; D-015) | not planned | done (slice 011): same-name helper (advisory) + racy cache counter rule; similarity engine measured and dropped |
 
 Revised order: D-021.
