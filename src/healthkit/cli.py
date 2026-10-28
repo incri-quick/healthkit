@@ -13,7 +13,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from healthkit import apicheck, baseline, checks, config, gitdiff, report, routes
+from healthkit import apicheck, baseline, checks, config, gitdiff, report, routes, scorecard
 from healthkit.findings import Finding, ToolError, ToolSkipped
 from healthkit.tools import codespell, copies, django, importlinter, opengrep, options, ruff
 
@@ -32,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
         command = commands.add_parser(name, help=text)
         command.add_argument("folders", nargs="*", default=["."], help="default: the repo")
         command.add_argument("--format", choices=report.FORMATS, default="text", help=FORMAT)
+    card = commands.add_parser("scorecard", help="facts per module, worst first")
+    card.add_argument("folders", nargs="*", default=["."], help="default: the repo")
+    card.add_argument("--format", choices=("text", "json", "markdown"), default="text")
     apicheck.add_parser(commands)
     routes.add_parser(commands)
     args = parser.parse_args(argv)
@@ -39,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
         return apicheck.run(args)
     if args.command == "routes":
         return routes.run(args)
+    if args.command == "scorecard":
+        return _scorecard(Path.cwd(), args.folders, args.format)
     if args.command in {"scan", "baseline"}:
         return _scan(Path.cwd(), args.folders, write=args.command == "baseline", fmt=args.format)
     return _review(Path.cwd(), args.base, args.format)
@@ -154,6 +159,33 @@ def _scan(cwd: Path, folders: list[str], *, write: bool, fmt: str = "text") -> i
     parts += [f"fixed since the baseline: {gone}"] if gone else []
     code = 2 if run.failed else (1 if new else 0)
     return report.emit(report.Report("scan", code, parts, new, advisory), fmt)
+
+
+def _scorecard(cwd: Path, folders: list[str], fmt: str) -> int:
+    """One row of facts per module (slice 018). A tool that cannot run means no card: a
+    partial card would look whole."""
+    try:
+        root = gitdiff.repo_root(cwd)
+        settings = config.load(root)
+        files = scorecard.app_files(_python_files(root, cwd, folders, settings))
+    except (gitdiff.GitError, config.ConfigError) as exc:
+        print(f"healthkit: {exc}", file=sys.stderr)
+        return 2
+    if not files:
+        print(f"healthkit scorecard: 0 Python files in {', '.join(folders)}")
+        return 0
+    run = _run_tools(root, sorted(files))
+    found = [f for f in run.findings if f.path in files and not settings.allows(f)]
+    targets = [(cwd / f).resolve().relative_to(root.resolve()).as_posix() for f in folders]
+    try:
+        card = scorecard.build(root, targets, files, found)
+    except ToolError as exc:
+        print(f"healthkit: pyscn: {exc}", file=sys.stderr)
+        return 2
+    if run.failed:
+        return 2
+    scorecard.emit(card, fmt)
+    return 0
 
 
 def _python_files(root: Path, cwd: Path, folders: list[str], settings: config.Settings) -> set[str]:

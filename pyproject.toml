@@ -44,4 +44,5 @@ ignore = [
 "src/healthkit/apicheck.py" = ["T201"]  # a CLI command too
 "src/healthkit/routes.py" = ["T201"]  # a CLI command too
 "src/healthkit/report.py" = ["T201"]  # printing the report is its job
+"src/healthkit/scorecard.py" = ["T201"]  # printing the card is its job
 "tests/**" = ["S101", "PLR2004", "ANN", "INP001", "S603", "S607"]

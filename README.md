@@ -32,6 +32,7 @@ Run them from inside the project's git repository.
 | `healthkit baseline users/` | Remembers today's findings in a folder, so later runs show only **new** ones. |
 | `healthkit api --schema <url> --token-env TOKEN_A` | Sends good and bad input to every API route; any server error (500) is a finding. Give `--token-env` twice (two users, ideally in different organisations) and it also checks that one user cannot read the other's objects. Local servers only. |
 | `healthkit routes --schema <url> --callers <folder>` | Lists API routes that no client code calls. |
+| `healthkit scorecard [folders]` | One row of facts per module, the ones needing attention first: files, lines, too-complex functions, the most complex one, problems and hints. |
 
 ### Output formats
 
