@@ -30,7 +30,7 @@ Run them from inside the project's git repository.
 | `healthkit review --base main` | Checks only the lines your branch changed since `main`. Use before you push. |
 | `healthkit scan users/` | Checks **every** line of the Python files in a folder. Use to check one module. |
 | `healthkit baseline users/` | Remembers today's findings in a folder, so later runs show only **new** ones. |
-| `healthkit api --schema <url> --token-env TOKEN_A` | Sends good and bad input to every API route; any server error (500) is a finding. Give `--token-env` twice (two users, ideally in different organisations) and it also checks that one user cannot read the other's objects. Local servers only. |
+| `healthkit api --schema <url> --token-env TOKEN_A` | Sends good and bad input to every API route; any server error (500) is a finding. Reads only (GET) unless you add `--allow-writes`. Give `--token-env` once per user: each user is tested, and with two or more it also checks that one user cannot read another's objects. Local servers only. |
 | `healthkit routes --schema <url> --callers <folder>` | Lists API routes that no client code calls. |
 | `healthkit scorecard [folders]` | One row of facts per module, the ones needing attention first: files, lines, too-complex functions, the most complex one, problems and hints. |
 
@@ -58,6 +58,23 @@ Exit codes are the same in every format. Machine formats are always UTF-8.
 
 Exit codes: **0** nothing found, **1** problems found, **2** could not check (never treat
 this as a pass), **3** only a settings change that needs a person's approval.
+
+### The API check
+
+- **Reads only by default.** Only GET requests are sent, so no data changes. Add
+  `--allow-writes` to also send POST, PUT, PATCH and DELETE: that run **creates, changes
+  and deletes data** (it can deactivate users or reverse payments), so use spare test
+  data and reset it afterwards.
+- **Every user is tested.** Give one `--token-env` per role, for example an admin, a
+  plain user and a user in another organisation. Findings name the user that hit them:
+  `GET /report: [schemathesis ST101] Server error (as ADMIN_TOKEN)`.
+- **Refused routes are listed per user.** A route that answered a user only with 401 or
+  403 was not tested as that user; it is listed under `not tested (refused by login)`.
+  With one user, most routes refused means the token did not work: exit 2. With several,
+  only a token that works on nothing is exit 2, because a plain user is refused on every
+  admin route by design.
+- Tokens are read from environment variables, never typed on the command line, and never
+  written to the reports.
 
 ## The project's `.healthkit/` folder
 
@@ -124,7 +141,8 @@ Never:
 - edit anything in `.healthkit/` to make a finding go away;
 - add `# noqa` or `# nosemgrep` to silence a finding;
 - write or refresh a baseline unless the person asks for it;
-- run `healthkit api` against anything but a local test server.
+- run `healthkit api` against anything but a local test server;
+- add `--allow-writes` unless the person said the data may be changed.
 
 ## For people working on healthkit itself
 

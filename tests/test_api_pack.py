@@ -55,7 +55,8 @@ def crashy_api():
 
 
 def api(*args: str) -> int:
-    return cli.main(["api", *args, "--max-examples", "20"])
+    # The crashing routes are POSTs: this pack predates reads-only (slice 019).
+    return cli.main(["api", *args, "--max-examples", "20", "--allow-writes"])
 
 
 def test_routes_that_crash_on_bad_input_are_reported(crashy_api, capsys, tmp_path):

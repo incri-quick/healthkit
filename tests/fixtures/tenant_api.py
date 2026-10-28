@@ -1,15 +1,19 @@
-"""A tiny two-user API for the API pack's tests (slice 016). Standard library only.
+"""A tiny two-user API for the API pack's tests (slices 016, 019). Standard library only.
 
 GET /notes             the caller's own notes
 GET /notes/{note_id}   any note, to anyone: the cross-user read bug (no owner check)
+POST /notes            a write: never sent unless --allow-writes (slice 019)
 GET /items/{item_id}   404 for every id except 7, which crashes (500): reachable only
                        with a real id, the way QuickRPA's routes 404 on guessed ids
+GET /report            admin-only: user b crashes it (500), user a is refused (403)
 
-python tenant_api.py <port>     tokens: "tok-a" (user a), "tok-b" (user b)
+python tenant_api.py <port> [log]    tokens: "tok-a" (user a), "tok-b" (user b);
+                                     log: a file each request's method is added to
 """
 
 import json
 import sys
+from pathlib import Path
 from wsgiref.simple_server import WSGIRequestHandler, make_server
 
 TOKENS = {"Bearer tok-a": "a", "Bearer tok-b": "b"}
@@ -40,7 +44,12 @@ SCHEMA = {
                         },
                     }
                 },
-            }
+            },
+            "post": {
+                "security": SECURE,
+                "requestBody": {"content": {"application/json": {"schema": NOTE}}},
+                "responses": {"201": {"description": "created"}},
+            },
         },
         "/notes/{note_id}": {
             "get": {
@@ -62,22 +71,39 @@ SCHEMA = {
                 "responses": {"200": {"description": "ok"}, "404": {"description": "no"}},
             }
         },
+        "/report": {
+            "get": {
+                "security": SECURE,
+                "responses": {"200": {"description": "ok"}, "403": {"description": "admins"}},
+            }
+        },
     },
 }
+LOG = Path(sys.argv[2]) if len(sys.argv) > 2 else None  # the optional log file
 
 
-def app(environ, start_response):
+def app(environ, start_response):  # noqa: C901, PLR0911 - one branch per route
     def reply(status, body):
         start_response(status, [("Content-Type", "application/json")])
         return [json.dumps(body).encode()]
 
-    path = environ["PATH_INFO"]
+    path, method = environ["PATH_INFO"], environ["REQUEST_METHOD"]
     if path == "/openapi.json":
         return reply("200 OK", SCHEMA)
+    if LOG:
+        with LOG.open("a", encoding="utf-8") as log:
+            log.write(method + "\n")
     user = TOKENS.get(environ.get("HTTP_AUTHORIZATION", ""))
     if not user:
         return reply("401 Unauthorized", {"detail": "auth"})
     last = path.rsplit("/", 1)[-1]
+    if path == "/report":
+        if user == "a":
+            return reply("403 Forbidden", {"detail": "admins only"})
+        msg = "the admin report crashes"
+        raise RuntimeError(msg)
+    if path == "/notes" and method == "POST":
+        return reply("201 Created", {"id": 3})
     if path == "/notes":
         return reply("200 OK", [n for n in NOTES.values() if n["owner"] == user])
     if path.startswith("/notes/") and last.isdigit() and int(last) in NOTES:

@@ -95,7 +95,9 @@ def test_a_route_the_project_accepts_is_not_reported(repo, tenant_api, capsys, t
     repo.write(
         ".healthkit/config.toml",
         '[[allow]]\nrule = "ST402"\npath = "GET /notes/{note_id}"\n'
-        'reason = "capability URL: the id in the path is the credential"\n',
+        'reason = "capability URL: the id in the path is the credential"\n'
+        '[[allow]]\nrule = "ST101"\npath = "GET /report"\n'
+        'reason = "the second user crashes it (slice 019), not this test\'s subject"\n',
     )
 
     code = api(tenant_api, tmp_path, "HK_TOKEN_A", "HK_TOKEN_B")
@@ -103,7 +105,7 @@ def test_a_route_the_project_accepts_is_not_reported(repo, tenant_api, capsys, t
     out = capsys.readouterr().out
     assert code == 0, out
     assert "ST402" not in out
-    assert "allowed: 1" in out
+    assert "allowed: 2" in out
 
 
 def test_one_user_cannot_check_cross_user_reads(tenant_api, capsys, tmp_path):

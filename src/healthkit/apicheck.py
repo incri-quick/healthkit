@@ -25,8 +25,13 @@ def add_parser(commands) -> None:  # noqa: ANN001 - argparse's private subparser
         action="append",
         default=[],
         metavar="NAME",
-        help="environment variable holding a user's bearer token; give two or more users "
-        "to also check that one user cannot read another's objects",
+        help="environment variable holding a user's bearer token; give two or more users: "
+        "each is tested, and one user must not read another's objects",
+    )
+    api.add_argument(
+        "--allow-writes",
+        action="store_true",
+        help="also send POST, PUT, PATCH and DELETE: this CHANGES DATA (default: reads only)",
     )
     api.add_argument("--max-examples", type=int, default=50, help="generated inputs per route")
     api.add_argument("--report-dir", type=Path, help="where to keep the reports (default: temp)")
@@ -44,15 +49,16 @@ def run(args) -> int:  # noqa: ANN001 - argparse.Namespace
     try:
         urls = [u for u in (args.schema, args.base_url) if u and "://" in u]
         schemathesis.check_hosts_are_local(urls, args.allow_remote_host)
-        tokens = [_token(name) for name in args.token_env]
+        users = _users(args.token_env)
         settings = _settings()
         result = schemathesis.run(
             args.schema,
             args.base_url,
-            tokens,
+            users,
             args.max_examples,
             report_dir,
             parameters=settings.api_parameters,
+            writes=args.allow_writes,
         )
     except (ToolError, config.ConfigError) as exc:
         print(f"healthkit api: {exc}", file=sys.stderr)
@@ -63,14 +69,19 @@ def run(args) -> int:  # noqa: ANN001 - argparse.Namespace
     allowed = len(result.findings) - len(findings)
     for finding in sorted(set(findings), key=lambda f: (f.path, f.rule)):
         print(f"{finding.path}: [{finding.tool} {finding.rule}] {finding.message}")
-    if result.refused:  # never silent: name what the login kept out (slice 007)
-        print(f"not tested (refused by login): {len(result.refused)} operation(s)")
-        for operation in result.refused:
+    # Never silent: name what the login kept out (slice 007), for each user (slice 019).
+    for name, refused in result.refused.items():
+        who = f" as {name}" if len(users) > 1 else ""
+        print(f"not tested (refused by login){who}: {len(refused)} operation(s)")
+        for operation in refused:
             print(f"  {operation}")
     routes = len({f.path for f in findings})
     verdict = f"{routes} route(s) failed a check" if findings else "no server errors found"
     parts = [f"healthkit api: {verdict} in {result.tested} operation(s)"]
-    parts += [f"users: {len(tokens)} (cross-user reads checked)"] if len(tokens) > 1 else []
+    parts += (
+        [f"users: {len(users)}, each tested (cross-user reads checked)"] if len(users) > 1 else []
+    )
+    parts += ["writes on: this run may have changed data"] if args.allow_writes else ["reads only"]
     parts += [f"allowed: {allowed}"] if allowed else []
     parts += [f"shallow (no valid sample data): {result.shallow}"] if result.shallow else []
     parts += [f"reports: {report_dir}"]
@@ -84,6 +95,15 @@ def _settings() -> config.Settings:
         return config.load(gitdiff.repo_root(Path.cwd()))
     except gitdiff.GitError:
         return config.Settings()
+
+
+def _users(names: list[str]) -> dict[str, str]:
+    """Each user, named by the variable holding its token (slice 019)."""
+    users = {name: _token(name) for name in names}
+    if len(users) < len(names):
+        msg = "the same --token-env was given twice"
+        raise ToolError(msg)
+    return users
 
 
 def _token(name: str) -> str:
