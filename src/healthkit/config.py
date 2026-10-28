@@ -28,11 +28,13 @@ DEFAULT_EXCLUDE = ("**/migrations/[0-9][0-9][0-9][0-9]_*.py", ".healthkit/**")
 TEST_FILE = re.compile(
     r"(?:^|/)(?:tests?/|tests?(?:_[^/]*)?\.py$|test_[^/]*\.py$|[^/]*_tests?\.py$)"
 )
-_TOP_KEYS = {"exclude", "allow", "check", "django", "ruff"}
+_TOP_KEYS = {"exclude", "allow", "check", "django", "ruff", "spelling"}
 _ALLOW_KEYS = {"rule", "path", "reason"}
 _CHECK_KEYS = {"name", "command", "paths", "reason", "timeout"}
 _DJANGO_KEYS = {"soft_delete_fields"}
 _RUFF_KEYS = {"extra"}
+_SPELLING_KEYS = {"ignore"}
+_WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _RULE_CODE = re.compile(r"[A-Z]{1,4}[0-9]{0,4}")  # "D1", "ANN", "PLR2004"
 
 
@@ -65,6 +67,7 @@ class Settings:
     checks: tuple[Check, ...] = ()
     soft_delete_fields: tuple[str, ...] = ("is_deleted",)
     ruff_extra: tuple[str, ...] = ()  # ruff checks the project chose (slice 013)
+    spelling_ignore: tuple[str, ...] = ()  # words the project accepts (slice 014)
 
     def is_excluded(self, path: str) -> bool:
         return any(glob_match(path, pattern) for pattern in self.exclude)
@@ -104,12 +107,17 @@ def parse(text: str | None) -> Settings:
     ]:
         msg = f'{CONFIG.as_posix()}: [ruff] extra must be ruff rule codes like "D1": {bad}'
         raise ConfigError(msg)
+    words = _list(_table(data, "spelling", _SPELLING_KEYS).get("ignore", []), "ignore")
+    if bad := [w for w in words if not isinstance(w, str) or not _WORD.fullmatch(w)]:
+        msg = f"{CONFIG.as_posix()}: [spelling] ignore must be a list of words: {bad}"
+        raise ConfigError(msg)
     return Settings(
         exclude=DEFAULT_EXCLUDE + tuple(exclude),
         allow=tuple(allow),
         checks=tuple(checks),
         soft_delete_fields=tuple(_text(f, "soft_delete_fields") for f in fields),
         ruff_extra=tuple(extra),
+        spelling_ignore=tuple(words),
     )
 
 

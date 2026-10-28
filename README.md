@@ -59,8 +59,13 @@ Everything specific to one project lives in its own `.healthkit/` folder, never 
     docstrings (`D1`), type hints (`ANN`) or bare numbers (`PLR2004`). Off unless you add
     them: on most projects they fire thousands of times, so add a baseline when you do.
 
-Every project also gets "worth a look" hints for functions that are too complex (ruff
-`C901`, more than 10 branches); an edit anywhere inside such a function shows it.
+  - `[spelling] ignore = ["liscense"]`: words to accept, such as a misspelt name you cannot
+    change (a database field).
+
+Every project also gets two kinds of "worth a look" hints:
+- functions that are too complex (ruff `C901`, more than 10 branches); an edit anywhere
+  inside such a function shows it;
+- spelling: clear-cut typos in messages, comments and names (codespell).
 - `rules/*.yaml`: the project's own Opengrep rules.
 - `importlinter.ini`: which layers may import which.
 - `baseline.json`: written by `healthkit baseline`.
