@@ -267,7 +267,7 @@ mulearnbackend 55%), under the 70% slice 008 set for a rule that fails the gate.
 |---|---|---|---|
 | M0 | Design doc + repo skeleton; settle O-1..O-5 | 1 day | done |
 | M1 | Tool trial on QuickRPA backend: keep or drop each candidate | 1 day | done (slice 001) |
-| M2 | Core: diff filter, finding format, baseline, gate, report, replay harness | 3–4 days | mostly (slices 002-006); baseline file and reviewer-style report not built |
+| M2 | Core: diff filter, finding format, baseline, gate, report, replay harness | 3–4 days | mostly (slices 002-006, 012): baseline + folder scan + usage guide done (slice 012); reviewer-style report not built |
 | M3 | Python pack: ruff + Opengrep adapters, names-that-lie and error-handling rules | 3–4 days | partly: adapters + 2 rules; names-that-lie moved to the AI layer (D-021) |
 | M4 | Django pack + project packs (each project's own `.healthkit/`, D-022) | 3 days | partly: `.healthkit/` (slice 004); project checks + `soft-delete-read` (advisory) done (slice 008) |
 | M5 | First replay score; first live run on Susheel's next module | 1 day | score done (slice 006); live run done (slice 009): 0 findings, recall needs a human review |
