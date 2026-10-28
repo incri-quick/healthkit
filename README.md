@@ -65,7 +65,10 @@ Everything specific to one project lives in its own `.healthkit/` folder, never 
 Every project also gets two kinds of "worth a look" hints:
 - functions that are too complex (ruff `C901`, more than 10 branches); an edit anywhere
   inside such a function shows it;
-- spelling: clear-cut typos in messages, comments and names (codespell).
+- spelling: clear-cut typos in messages, comments and names (codespell);
+- options nobody sets: a function option with a default that no call in the project ever
+  passes, so its other value is dead code. If your project has code called from outside
+  the repo (an SDK, a plugin API), add `[[allow]]` with rule `option-never-passed` for it.
 - `rules/*.yaml`: the project's own Opengrep rules.
 - `importlinter.ini`: which layers may import which.
 - `baseline.json`: written by `healthkit baseline`.

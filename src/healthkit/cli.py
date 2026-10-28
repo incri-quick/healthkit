@@ -15,9 +15,9 @@ from pathlib import Path
 
 from healthkit import apicheck, baseline, checks, config, gitdiff, routes
 from healthkit.findings import Finding, ToolError, ToolSkipped
-from healthkit.tools import codespell, copies, django, importlinter, opengrep, ruff
+from healthkit.tools import codespell, copies, django, importlinter, opengrep, options, ruff
 
-GATE_TOOLS = (ruff, opengrep, importlinter, django, copies, codespell)  # D-014: the gate
+GATE_TOOLS = (ruff, opengrep, importlinter, django, copies, codespell, options)  # D-014
 BASELINE = "remember today's findings in these folders, so only new ones show"
 
 
