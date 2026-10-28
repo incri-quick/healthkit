@@ -28,10 +28,12 @@ DEFAULT_EXCLUDE = ("**/migrations/[0-9][0-9][0-9][0-9]_*.py", ".healthkit/**")
 TEST_FILE = re.compile(
     r"(?:^|/)(?:tests?/|tests?(?:_[^/]*)?\.py$|test_[^/]*\.py$|[^/]*_tests?\.py$)"
 )
-_TOP_KEYS = {"exclude", "allow", "check", "django"}
+_TOP_KEYS = {"exclude", "allow", "check", "django", "ruff"}
 _ALLOW_KEYS = {"rule", "path", "reason"}
 _CHECK_KEYS = {"name", "command", "paths", "reason", "timeout"}
 _DJANGO_KEYS = {"soft_delete_fields"}
+_RUFF_KEYS = {"extra"}
+_RULE_CODE = re.compile(r"[A-Z]{1,4}[0-9]{0,4}")  # "D1", "ANN", "PLR2004"
 
 
 class ConfigError(Exception):
@@ -62,6 +64,7 @@ class Settings:
     allow: tuple[Allow, ...] = ()
     checks: tuple[Check, ...] = ()
     soft_delete_fields: tuple[str, ...] = ("is_deleted",)
+    ruff_extra: tuple[str, ...] = ()  # ruff checks the project chose (slice 013)
 
     def is_excluded(self, path: str) -> bool:
         return any(glob_match(path, pattern) for pattern in self.exclude)
@@ -93,18 +96,30 @@ def parse(text: str | None) -> Settings:
     exclude = [_path(p, "exclude") for p in _list(data.get("exclude", []), "exclude")]
     allow = [_allow(entry) for entry in _list(data.get("allow", []), "allow")]
     checks = [_check(entry) for entry in _list(data.get("check", []), "check")]
-    django = data.get("django", {})
-    if not isinstance(django, dict):
-        msg = f"{CONFIG.as_posix()}: [django] must be a table"
-        raise ConfigError(msg)
-    _no_unknown_keys(django, _DJANGO_KEYS, "[django]")
+    django = _table(data, "django", _DJANGO_KEYS)
     fields = _list(django.get("soft_delete_fields", ["is_deleted"]), "soft_delete_fields")
+    extra = _list(_table(data, "ruff", _RUFF_KEYS).get("extra", []), "extra")
+    if bad := [
+        code for code in extra if not isinstance(code, str) or not _RULE_CODE.fullmatch(code)
+    ]:
+        msg = f'{CONFIG.as_posix()}: [ruff] extra must be ruff rule codes like "D1": {bad}'
+        raise ConfigError(msg)
     return Settings(
         exclude=DEFAULT_EXCLUDE + tuple(exclude),
         allow=tuple(allow),
         checks=tuple(checks),
         soft_delete_fields=tuple(_text(f, "soft_delete_fields") for f in fields),
+        ruff_extra=tuple(extra),
     )
+
+
+def _table(data: dict, name: str, known: set[str]) -> dict:
+    table = data.get(name, {})
+    if not isinstance(table, dict):
+        msg = f"{CONFIG.as_posix()}: [{name}] must be a table"
+        raise ConfigError(msg)
+    _no_unknown_keys(table, known, f"[{name}]")
+    return table
 
 
 def _check(entry: object) -> Check:

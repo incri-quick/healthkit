@@ -55,6 +55,12 @@ Everything specific to one project lives in its own `.healthkit/` folder, never 
     guard commands, run by `review` before push. They are taken from the base branch, so a
     branch cannot add a command that runs on your machine.
   - `[django] soft_delete_fields = ["is_deleted"]`: the field that marks deleted rows.
+  - `[ruff] extra = ["D1", "ANN", "PLR2004"]`: more ruff checks your team wants, such as
+    docstrings (`D1`), type hints (`ANN`) or bare numbers (`PLR2004`). Off unless you add
+    them: on most projects they fire thousands of times, so add a baseline when you do.
+
+Every project also gets "worth a look" hints for functions that are too complex (ruff
+`C901`, more than 10 branches); an edit anywhere inside such a function shows it.
 - `rules/*.yaml`: the project's own Opengrep rules.
 - `importlinter.ini`: which layers may import which.
 - `baseline.json`: written by `healthkit baseline`.
