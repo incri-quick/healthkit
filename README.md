@@ -30,7 +30,7 @@ Run them from inside the project's git repository.
 | `healthkit review --base main` | Checks only the lines your branch changed since `main`. Use before you push. |
 | `healthkit scan users/` | Checks **every** line of the Python files in a folder. Use to check one module. |
 | `healthkit baseline users/` | Remembers today's findings in a folder, so later runs show only **new** ones. |
-| `healthkit api --schema <url>` | Sends good and bad input to every API route; any server error (500) is a finding. Local servers only. |
+| `healthkit api --schema <url> --token-env TOKEN_A` | Sends good and bad input to every API route; any server error (500) is a finding. Give `--token-env` twice (two users, ideally in different organisations) and it also checks that one user cannot read the other's objects. Local servers only. |
 | `healthkit routes --schema <url> --callers <folder>` | Lists API routes that no client code calls. |
 
 ### What the results mean
@@ -59,6 +59,9 @@ Everything specific to one project lives in its own `.healthkit/` folder, never 
     docstrings (`D1`), type hints (`ANN`) or bare numbers (`PLR2004`). Off unless you add
     them: on most projects they fire thousands of times, so add a baseline when you do.
 
+  - `[api.parameters]`: real values for the API check, such as ids that exist in your test
+    data (`workflow_id = 12`, or `workflow_id = "${HK_WORKFLOW_ID}"` to read one from the
+    environment). Without them most routes only answer "not found" to guessed ids.
   - `[spelling] ignore = ["liscense"]`: words to accept, such as a misspelt name you cannot
     change (a database field).
 

@@ -28,12 +28,13 @@ DEFAULT_EXCLUDE = ("**/migrations/[0-9][0-9][0-9][0-9]_*.py", ".healthkit/**")
 TEST_FILE = re.compile(
     r"(?:^|/)(?:tests?/|tests?(?:_[^/]*)?\.py$|test_[^/]*\.py$|[^/]*_tests?\.py$)"
 )
-_TOP_KEYS = {"exclude", "allow", "check", "django", "ruff", "spelling"}
+_TOP_KEYS = {"exclude", "allow", "check", "django", "ruff", "spelling", "api"}
 _ALLOW_KEYS = {"rule", "path", "reason"}
 _CHECK_KEYS = {"name", "command", "paths", "reason", "timeout"}
 _DJANGO_KEYS = {"soft_delete_fields"}
 _RUFF_KEYS = {"extra"}
 _SPELLING_KEYS = {"ignore"}
+_API_KEYS = {"parameters"}
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _RULE_CODE = re.compile(r"[A-Z]{1,4}[0-9]{0,4}")  # "D1", "ANN", "PLR2004"
 
@@ -68,6 +69,8 @@ class Settings:
     soft_delete_fields: tuple[str, ...] = ("is_deleted",)
     ruff_extra: tuple[str, ...] = ()  # ruff checks the project chose (slice 013)
     spelling_ignore: tuple[str, ...] = ()  # words the project accepts (slice 014)
+    # Real values for the API pack, e.g. ids; "${VAR}" read from the environment (016).
+    api_parameters: tuple[tuple[str, str | int | float | bool], ...] = ()
 
     def is_excluded(self, path: str) -> bool:
         return any(glob_match(path, pattern) for pattern in self.exclude)
@@ -118,7 +121,18 @@ def parse(text: str | None) -> Settings:
         soft_delete_fields=tuple(_text(f, "soft_delete_fields") for f in fields),
         ruff_extra=tuple(extra),
         spelling_ignore=tuple(words),
+        api_parameters=_api_parameters(data),
     )
+
+
+def _api_parameters(data: dict) -> tuple[tuple[str, str | int | float | bool], ...]:
+    values = _table(data, "api", _API_KEYS).get("parameters", {})
+    if not isinstance(values, dict) or any(
+        not isinstance(v, (str, int, float, bool)) for v in values.values()
+    ):
+        msg = f"{CONFIG.as_posix()}: [api.parameters] must be name = text or number"
+        raise ConfigError(msg)
+    return tuple(sorted(values.items()))
 
 
 def _table(data: dict, name: str, known: set[str]) -> dict:

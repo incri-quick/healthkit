@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from healthkit import config, gitdiff
 from healthkit.findings import ToolError
 from healthkit.tools import schemathesis
 
@@ -19,7 +20,14 @@ def add_parser(commands) -> None:  # noqa: ANN001 - argparse's private subparser
     api = commands.add_parser("api", help="send bad input to every route; a 500 is a finding")
     api.add_argument("--schema", required=True, help="OpenAPI URL or file")
     api.add_argument("--base-url", help="API base URL (needed when --schema is a file)")
-    api.add_argument("--token-env", help="NAME of the environment variable holding a bearer token")
+    api.add_argument(
+        "--token-env",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="environment variable holding a user's bearer token; give two or more users "
+        "to also check that one user cannot read another's objects",
+    )
     api.add_argument("--max-examples", type=int, default=50, help="generated inputs per route")
     api.add_argument("--report-dir", type=Path, help="where to keep the reports (default: temp)")
     api.add_argument(
@@ -36,12 +44,23 @@ def run(args) -> int:  # noqa: ANN001 - argparse.Namespace
     try:
         urls = [u for u in (args.schema, args.base_url) if u and "://" in u]
         schemathesis.check_hosts_are_local(urls, args.allow_remote_host)
-        token = _token(args.token_env)
-        result = schemathesis.run(args.schema, args.base_url, token, args.max_examples, report_dir)
-    except ToolError as exc:
+        tokens = [_token(name) for name in args.token_env]
+        settings = _settings()
+        result = schemathesis.run(
+            args.schema,
+            args.base_url,
+            tokens,
+            args.max_examples,
+            report_dir,
+            parameters=settings.api_parameters,
+        )
+    except (ToolError, config.ConfigError) as exc:
         print(f"healthkit api: {exc}", file=sys.stderr)
         return 2
-    findings = result.findings
+    # A route the project accepts, with a written reason: e.g. a capability URL, where the
+    # token in the path is the credential (QuickRPA's agent status, slice 016).
+    findings = [f for f in result.findings if not settings.allows(f)]
+    allowed = len(result.findings) - len(findings)
     for finding in sorted(set(findings), key=lambda f: (f.path, f.rule)):
         print(f"{finding.path}: [{finding.tool} {finding.rule}] {finding.message}")
     if result.refused:  # never silent: name what the login kept out (slice 007)
@@ -49,20 +68,26 @@ def run(args) -> int:  # noqa: ANN001 - argparse.Namespace
         for operation in result.refused:
             print(f"  {operation}")
     routes = len({f.path for f in findings})
-    verdict = (
-        f"{routes} route(s) answered with a server error" if findings else "no server errors found"
-    )
+    verdict = f"{routes} route(s) failed a check" if findings else "no server errors found"
     parts = [f"healthkit api: {verdict} in {result.tested} operation(s)"]
+    parts += [f"users: {len(tokens)} (cross-user reads checked)"] if len(tokens) > 1 else []
+    parts += [f"allowed: {allowed}"] if allowed else []
     parts += [f"shallow (no valid sample data): {result.shallow}"] if result.shallow else []
     parts += [f"reports: {report_dir}"]
     print(" | ".join(parts))
     return 1 if findings else 0
 
 
-def _token(name: str | None) -> str | None:
+def _settings() -> config.Settings:
+    """The project's `.healthkit/config.toml`, when run inside a git repository."""
+    try:
+        return config.load(gitdiff.repo_root(Path.cwd()))
+    except gitdiff.GitError:
+        return config.Settings()
+
+
+def _token(name: str) -> str:
     """Read the token by variable name only; the value is never printed (slice 007)."""
-    if not name:
-        return None
     token = os.environ.get(name)
     if not token:
         msg = f"--token-env {name}: that environment variable is not set"

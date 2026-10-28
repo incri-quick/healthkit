@@ -22,6 +22,7 @@ from healthkit.findings import Finding, ToolError
 NAME = "schemathesis"
 COMMAND = ["uvx", "schemathesis@4.32.5"]
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+AUTH_FILE = "users.wfc.json"  # holds the tokens: removed after every run (slice 016)
 
 
 def check_hosts_are_local(urls: list[str], allowed: list[str]) -> None:
@@ -37,12 +38,14 @@ def check_hosts_are_local(urls: list[str], allowed: list[str]) -> None:
             raise ToolError(msg)
 
 
-def run(
+def run(  # noqa: PLR0913 - each argument is one setting of the run
     schema: str,
     base_url: str | None,
-    token: str | None,
+    tokens: list[str],
     max_examples: int,
     report_dir: Path,
+    *,
+    parameters: tuple[tuple[str, object], ...] = (),
 ) -> ApiRun:
     report_dir = report_dir.resolve()
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -54,7 +57,7 @@ def run(
         "run",
         schema,
         "--checks",
-        "not_a_server_error",
+        _prepare(report_dir, tokens, parameters),
         "--max-examples",
         str(max_examples),
         "--generation-deterministic",
@@ -64,7 +67,7 @@ def run(
         str(report),
     ]
     args += ["--url", base_url] if base_url else []
-    args += ["-H", f"Authorization: Bearer {token}"] if token else []
+    args += ["-H", f"Authorization: Bearer {tokens[0]}"] if len(tokens) == 1 else []
     env = {**os.environ, "PYTHONUTF8": "1"}  # measured: cp1252 console crash otherwise
     # Measured: it writes `.schemathesis/` and `.hypothesis/` into the folder it runs from
     # even in deterministic mode, so it runs from report_dir, never the user's project.
@@ -75,6 +78,8 @@ def run(
     except OSError as exc:
         msg = f"could not run schemathesis: {exc}"
         raise ToolError(msg) from exc
+    finally:
+        (report_dir / AUTH_FILE).unlink(missing_ok=True)  # never leave a token behind
     (report_dir / "schemathesis-console.txt").write_bytes(result.stdout + result.stderr)
     if result.returncode not in (0, 1) and not report.is_file():
         msg = f"could not run schemathesis (exit {result.returncode})"
@@ -97,6 +102,33 @@ def run(
         refused=list(warnings.get("missing_auth", [])),
         shallow=len(warnings.get("missing_test_data", [])),
     )
+
+
+def _prepare(report_dir: Path, tokens: list[str], parameters: tuple) -> str:
+    """Write the run's own `schemathesis.toml` (it reads it from the folder it runs in);
+    return the checks. Measured (slice 016): `[parameters]` takes real values, `${VAR}`
+    included; two or more users need a Web Fuzzing Commons auth file AND `peers`, or the
+    cross-user read check does not run."""
+    lines = ["[parameters]", *(f"{json.dumps(k)} = {json.dumps(v)}" for k, v in parameters)]
+    checks = "not_a_server_error"
+    if len(tokens) > 1:
+        users = [f"user{n}" for n in range(1, len(tokens) + 1)]
+        auth = [
+            {"name": user, "fixedHeaders": [{"name": "Authorization", "value": f"Bearer {t}"}]}
+            for user, t in zip(users, tokens, strict=True)
+        ]
+        auth_json = json.dumps({"schemaVersion": "1.0", "auth": auth})
+        (report_dir / AUTH_FILE).write_bytes(auth_json.encode("utf-8"))
+        lines += [
+            "",
+            "[auth.wfc]",
+            f"path = {json.dumps(AUTH_FILE)}",
+            f"peers = {json.dumps(users)}",
+        ]
+        checks += ",object_level_authorization"
+    text = "".join(f"{line}\n" for line in lines)
+    (report_dir / "schemathesis.toml").write_bytes(text.encode("utf-8"))
+    return checks
 
 
 @dataclass(frozen=True)
