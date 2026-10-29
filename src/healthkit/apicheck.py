@@ -11,7 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from healthkit import config, gitdiff
+from healthkit import config, gitdiff, policy
 from healthkit.findings import ToolError
 from healthkit.tools import schemathesis
 
@@ -65,14 +65,20 @@ def run(args) -> int:  # noqa: ANN001 - argparse.Namespace
         return 2
     # A route the project accepts, with a written reason: e.g. a capability URL, where the
     # token in the path is the credential (QuickRPA's agent status, slice 016).
-    findings = [f for f in result.findings if not settings.allows(f)]
-    allowed = len(result.findings) - len(findings)
+    access = policy.check(settings.api_deny, result.statuses, writes=args.allow_writes)
+    found = result.findings + access.findings
+    findings = [f for f in found if not settings.allows(f)]
+    allowed = len(found) - len(findings)
     for finding in sorted(set(findings), key=lambda f: (f.path, f.rule)):
         print(f"{finding.path}: [{finding.tool} {finding.rule}] {finding.message}")
     # Never silent: name what the login kept out (slice 007), for each user (slice 019),
     # and what had no valid sample data (slice 020).
     _per_user("not tested (refused by login)", result.refused, several=len(users) > 1)
     _per_user("shallow (no valid sample data)", result.shallow, several=len(users) > 1)
+    if access.unchecked:  # and what the access policy could not prove (slice 021)
+        print(f"access policy not checked: {len(access.unchecked)}")
+        for line in access.unchecked:
+            print(f"  {line}")
     routes = len({f.path for f in findings})
     verdict = f"{routes} route(s) failed a check" if findings else "no server errors found"
     parts = [f"healthkit api: {verdict} in {result.tested} operation(s)"]
@@ -81,11 +87,15 @@ def run(args) -> int:  # noqa: ANN001 - argparse.Namespace
     )
     parts += ["writes on: this run may have changed data"] if args.allow_writes else ["reads only"]
     parts += [f"allowed: {allowed}"] if allowed else []
+    if settings.api_deny:
+        parts += [f"access policy: {access.refused} route(s) refused as required"]
     shallow = len({op for operations in result.shallow.values() for op in operations})
     parts += [f"shallow (no valid sample data): {shallow}"] if shallow else []
     parts += [f"reports: {report_dir}"]
     print(" | ".join(parts))
-    return 1 if findings else 0
+    for error in access.errors:
+        print(f"healthkit api: {error}", file=sys.stderr)
+    return 2 if access.errors else 1 if findings else 0
 
 
 def _per_user(title: str, operations: dict[str, list[str]], *, several: bool) -> None:

@@ -75,10 +75,10 @@ def run(  # noqa: PLR0913 - each argument is one setting of the run
         for name in users or {"": ""}
     }
     found_by: dict[tuple[str, str, str], list[str]] = {}
-    for name, (findings, _, _) in runs.items():
-        for finding in findings:
+    for name, user_run in runs.items():
+        for finding in user_run.findings:
             found_by.setdefault((finding.rule, finding.path, finding.message), []).append(name)
-    reports = [data for _, data, _ in runs.values()]
+    reports = [user_run.data for user_run in runs.values()]
     return ApiRun(
         findings=[
             Finding(
@@ -91,13 +91,22 @@ def run(  # noqa: PLR0913 - each argument is one setting of the run
             for (rule, operation, message), names in found_by.items()
         ],
         tested=max(data.get("operations", {}).get("tested", 0) for data in reports),
-        refused={name: refused for name, (_, _, refused) in runs.items() if refused},
+        refused={name: run.refused for name, run in runs.items() if run.refused},
         shallow={
             name: shallow
-            for name, (_, data, _) in runs.items()
-            if (shallow := list(data.get("warnings", {}).get("missing_test_data", [])))
+            for name, run in runs.items()
+            if (shallow := list(run.data.get("warnings", {}).get("missing_test_data", [])))
         },
+        statuses={name: run.statuses for name, run in runs.items()},
     )
+
+
+@dataclass(frozen=True)
+class _UserRun:
+    findings: list[Finding]
+    data: dict  # the JSON report
+    refused: list[str]  # operations the login refused
+    statuses: dict[str, set[int]]  # per operation, answers to this user's login
 
 
 def _run_as(  # noqa: PLR0913 - each argument is one setting of the run
@@ -110,9 +119,8 @@ def _run_as(  # noqa: PLR0913 - each argument is one setting of the run
     max_examples: int,
     parameters: tuple,
     writes: bool,
-) -> tuple[list[Finding], dict, list[str]]:
-    """One Schemathesis run as the user `name`: its findings, its JSON report, and the
-    operations the login refused."""
+) -> _UserRun:
+    """One Schemathesis run as the user `name`."""
     folder.mkdir(parents=True, exist_ok=True)
     report = folder / "schemathesis-run.json"
     events = folder / "schemathesis-events.ndjson"
@@ -162,7 +170,7 @@ def _run_as(  # noqa: PLR0913 - each argument is one setting of the run
     log = read_events(events)
     refused = refused_by_login(data, log)
     no_silent_pass(data, refused, name if len(users) > 1 else None)
-    return failures(data, log), data, refused
+    return _UserRun(failures(data, log), data, refused, log.statuses)
 
 
 @dataclass
@@ -264,6 +272,8 @@ class ApiRun:
     tested: int
     refused: dict[str, list[str]]  # per user: answered only 401/403, not tested behind it
     shallow: dict[str, list[str]]  # per user: no valid sample data (e.g. real IDs)
+    # Per user, per operation: the statuses answered to that user's login (slice 021).
+    statuses: dict[str, dict[str, set[int]]] = field(default_factory=dict)
 
 
 def no_silent_pass(data: dict, refused: list[str], user: str | None = None) -> None:

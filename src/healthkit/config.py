@@ -34,7 +34,9 @@ _CHECK_KEYS = {"name", "command", "paths", "reason", "timeout"}
 _DJANGO_KEYS = {"soft_delete_fields"}
 _RUFF_KEYS = {"extra"}
 _SPELLING_KEYS = {"ignore"}
-_API_KEYS = {"parameters"}
+_API_KEYS = {"parameters", "deny"}
+_DENY_KEYS = {"user", "routes", "reason"}
+_ROUTE = re.compile(r"(?:\*|[A-Z]+) /\S*")  # "GET /people/students", "* /admin/**"
 _WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
 _RULE_CODE = re.compile(r"[A-Z]{1,4}[0-9]{0,4}")  # "D1", "ANN", "PLR2004"
 
@@ -62,6 +64,16 @@ class Check:
 
 
 @dataclass(frozen=True)
+class Deny:
+    """A user that must be refused on these routes (slice 021): the project's own access
+    policy, which healthkit checks but never invents."""
+
+    user: str  # a --token-env name
+    routes: tuple[str, ...]  # "METHOD /path" patterns, `*` one segment, `**` any
+    reason: str
+
+
+@dataclass(frozen=True)
 class Settings:
     exclude: tuple[str, ...] = DEFAULT_EXCLUDE
     allow: tuple[Allow, ...] = ()
@@ -71,6 +83,7 @@ class Settings:
     spelling_ignore: tuple[str, ...] = ()  # words the project accepts (slice 014)
     # Real values for the API pack, e.g. ids; "${VAR}" read from the environment (016).
     api_parameters: tuple[tuple[str, str | int | float | bool], ...] = ()
+    api_deny: tuple[Deny, ...] = ()
 
     def is_excluded(self, path: str) -> bool:
         return any(glob_match(path, pattern) for pattern in self.exclude)
@@ -114,6 +127,7 @@ def parse(text: str | None) -> Settings:
     if bad := [w for w in words if not isinstance(w, str) or not _WORD.fullmatch(w)]:
         msg = f"{CONFIG.as_posix()}: [spelling] ignore must be a list of words: {bad}"
         raise ConfigError(msg)
+    api = _table(data, "api", _API_KEYS)
     return Settings(
         exclude=DEFAULT_EXCLUDE + tuple(exclude),
         allow=tuple(allow),
@@ -122,6 +136,7 @@ def parse(text: str | None) -> Settings:
         ruff_extra=tuple(extra),
         spelling_ignore=tuple(words),
         api_parameters=_api_parameters(data),
+        api_deny=tuple(_deny(entry) for entry in _list(api.get("deny", []), "deny")),
     )
 
 
@@ -133,6 +148,21 @@ def _api_parameters(data: dict) -> tuple[tuple[str, str | int | float | bool], .
         msg = f"{CONFIG.as_posix()}: [api.parameters] must be name = text or number"
         raise ConfigError(msg)
     return tuple(sorted(values.items()))
+
+
+def _deny(entry: object) -> Deny:
+    if not isinstance(entry, dict):
+        msg = f"{CONFIG.as_posix()}: each [[api.deny]] entry must be a table"
+        raise ConfigError(msg)
+    where = f"[[api.deny]] {entry.get('user')!r}"
+    _no_unknown_keys(entry, _DENY_KEYS, where)
+    for key in ("user", "reason"):
+        _text(entry.get(key), f"{where}: '{key}'")
+    routes = _list(entry.get("routes"), f"{where}: routes")
+    if not routes or any(not isinstance(r, str) or not _ROUTE.fullmatch(r.strip()) for r in routes):
+        msg = f'{CONFIG.as_posix()}: {where}: routes must be a list like ["GET /path"]'
+        raise ConfigError(msg)
+    return Deny(entry["user"].strip(), tuple(r.strip() for r in routes), entry["reason"].strip())
 
 
 def _table(data: dict, name: str, known: set[str]) -> dict:

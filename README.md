@@ -73,6 +73,22 @@ this as a pass), **3** only a settings change that needs a person's approval.
   With one user, most routes refused means the token did not work: exit 2. With several,
   only a token that works on nothing is exit 2, because a plain user is refused on every
   admin route by design.
+- **The access policy** checks who must be refused where. healthkit cannot know your
+  roles, so you write the rules in `.healthkit/config.toml`, one entry per user:
+
+  ```toml
+  [[api.deny]]
+  user = "HK_TEACHER"   # the --token-env name
+  routes = ["GET /people/students", "GET /finances/**"]   # * = one path part, ** = any
+  reason = "a teacher sees only her own class"
+  ```
+
+  Any 2xx answer to that user on a matching route is a finding: `[policy must-refuse]`.
+  A 401 or 403 is "refused as required". Anything else (only 404, only 422) is listed
+  under `access policy not checked`, because a 404 can mean a guessed id as easily as a
+  refusal. A route pattern that matches nothing tested is exit 2, so a typo never passes.
+  It catches a route open to the wrong role, not a route that returns too many rows to
+  the right role.
 - **Shallow routes are listed per user**: routes with an id in the path that only got
   "not found", because no real id was known. Give real ids in `[api.parameters]`.
 - Tokens are read from environment variables, never typed on the command line, and never
@@ -98,6 +114,8 @@ Everything specific to one project lives in its own `.healthkit/` folder, never 
   - `[api.parameters]`: real values for the API check, such as ids that exist in your test
     data (`workflow_id = 12`, or `workflow_id = "${HK_WORKFLOW_ID}"` to read one from the
     environment). Without them most routes only answer "not found" to guessed ids.
+  - `[[api.deny]]` with `user`, `routes` and `reason`: the access policy (see "The API
+    check").
   - `[spelling] ignore = ["liscense"]`: words to accept, such as a misspelt name you cannot
     change (a database field).
 
