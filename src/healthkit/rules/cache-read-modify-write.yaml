@@ -1,0 +1,25 @@
+rules:
+  - id: cache-read-modify-write
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A counter read from the cache and written back + 1 is not atomic: simultaneous
+      requests read the same value and the count advances once. Use the cache's own
+      increment (incr, seeded with add).
+    metadata:
+      incident: QuickRPA AA-03
+    patterns:
+      - pattern-either:
+          - pattern-inside: |
+              $V = $C.get($K, ...)
+              ...
+          - pattern-inside: |
+              $V = $C.get($K, ...) or $D
+              ...
+      - pattern-either:
+          - pattern: $C.set($K, $V + $N, ...)
+          - patterns:
+              - pattern-inside: |
+                  $V += $N
+                  ...
+              - pattern: $C.set($K, $V, ...)

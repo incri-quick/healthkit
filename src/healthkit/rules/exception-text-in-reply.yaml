@@ -17,6 +17,14 @@ rules:
       - pattern-either:
           - pattern: raise $CLS(..., str($E), ...)
           - pattern: 'return {..., $KEY: str($E), ...}'
+          # Inside an f-string too (slice 007: AA-59 slipped through this way).
+          - pattern: raise $CLS(..., f"...{str($E)}...", ...)
+          - pattern: raise $CLS(..., f"...{$E}...", ...)
+          - pattern: 'return {..., $KEY: f"...{$E}...", ...}'
+      # `raise ... from exc` wraps the error for the calling code, it is not a reply
+      # (slice 007: QuickRPA commons/license_client.py's three wrappers).
+      # Measured: `pattern-not` does not exclude it in Opengrep 1.32; `pattern-not-inside` does.
+      - pattern-not-inside: raise $CLS(...) from $X
       # Only built-in exceptions: their text was not written by us. A project's own
       # exception classes carry messages written for the user (slice 001 trial:
       # 17 of 25 first-draft hits were such classes).

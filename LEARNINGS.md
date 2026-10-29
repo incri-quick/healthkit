@@ -5,6 +5,81 @@ Newest first.
 
 ---
 
+## L-022 Measure before building can mean building less (2026-10-28)
+
+Slice 011 was planned as near-copy detection. Measuring four matchers on the real cases
+first showed the expensive one (a similarity engine) found 1 of 4, and that most incidents
+were not copies in shape: one was a race pattern, one was the same steps in other code.
+Asked "is it worth it?", the answer was to ship two cheap checks (~110 lines) and drop the
+engine. The cheap checks then found a live bug no review had named (the vault decrypt
+throttle) and a security helper copied with opposite behaviour (`_client_ip`).
+
+**Changed:** a slice's measurement step ends with an explicit verdict (worth it / not /
+smaller), stated before any design is offered.
+
+## L-021 A tool's own test command can pass with nothing to test (2026-10-28)
+
+`opengrep test` passed a rule fixture file whose rule did not exist yet: it skips a
+fixture with no rule beside it. The built-in rules test could never fail for a missing or
+misnamed rule.
+
+**Changed:** a test now requires every fixture to have its rule; each new rule also gets a
+review-level test that fails without it.
+
+## L-020 An incident's label is a claim too (2026-10-27)
+
+The replay's answer key called four routes "unused" (AA-35, AA-42, AA-58, AA-61). Checked
+against the clients as they were on each date, two were in use: the frontend called
+AA-35's `PATCH /users/change-password/`, and the agent's installer called AA-58's
+`POST /auth/login` until its own fix landed, six seconds after the backend's. A check
+built to "find all four" would have been built to be wrong.
+
+**Changed:** before an incident becomes a test, its ground truth is checked at the
+incident's date; the test asserts the truth, and the label's error is recorded.
+
+## L-019 A negative result needs the same checking as a positive one (2026-10-27)
+
+Two runtime probes of `soft-delete-read` findings came back "not a bug": an archived robot
+was not listed, and a deleted file was refused. Both were bad setups: the test user could
+not see the probe's workspace, and the file owner had no Studio access. Set up correctly,
+the archived robot was listed.
+
+**Changed:** before a probe counts as a refutation, it must show it reached the code in
+question (the right user, the right tenant, the right status code for the right reason).
+
+## L-018 A second project finds what the first cannot (2026-10-27)
+
+`soft-delete-read` was tuned on QuickRPA, where models live in `models.py`. On the
+second project (mulearnbackend, models in `db/*.py`) it found no models at all: a silent
+zero, not an error. Precision also fell from what the tuned sample suggested: 25% on the
+first read, 41% on QuickRPA's held-out findings, 55% on the second project.
+
+**Changed:** D-022 holds in practice: a rule is measured on data it was not tuned on and on
+a second project before it is called generic, and "found nothing" on a new project is
+checked by hand before it is believed.
+
+## L-017 A sweep that writes data changes what the next sweep can find (2026-10-27)
+
+The second QuickRPA API sweep, same tool and settings, reported 4 crashes instead of 6.
+Neither bug was fixed: the first sweep had deactivated the user one crashing input hit
+and cleared the pending MFA setup the other needed. Replayed by hand with the right
+state, both still answered 500 (`IntegrityError`, `TypeError`).
+
+**Changed:** fewer API findings never means "fixed" until each missing one is replayed;
+any before/after comparison of API runs needs the same starting data (a database
+snapshot restored before each run).
+
+## L-016 Distrust the metric that looks good (2026-10-27)
+
+The replay's first metric, "a finding on a line the fix changed", gave 29/45. Reading
+the flagged lines showed most were coincidences: an unused import inside a behaviour
+fix, findings inside whole routes the fix deleted. Judged by whether the rule points at
+the problem itself: 9/45. Also found: the ruff gate rules were chosen (slice 001) partly
+by checking which hit these same fixes, so the replay is not fully out-of-sample.
+
+**Changed:** every automated score gets a by-hand read of its hits before it is quoted;
+selection data and test data are kept apart, and the next module is the clean test.
+
 ## L-015 Verifiers drift to what is easy to confirm (2026-10-27)
 
 Told which doors were already closed and asked to try new ones, the slice 005 verifier

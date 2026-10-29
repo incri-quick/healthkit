@@ -1,0 +1,9 @@
+diff --git a/users/services/tokens.py b/users/services/tokens.py
+index 7f45d79..e5132d6 100644
+--- a/users/services/tokens.py
++++ b/users/services/tokens.py
+@@ -24,2 +24,2 @@ def generate_token_pair(user) -> dict:
+-    _pca = user.password_changed_at
+-    refresh["password_changed_at"] = _pca.timestamp() if _pca else 0
++    password_changed_at = user.password_changed_at
++    refresh["password_changed_at"] = password_changed_at.timestamp() if password_changed_at else 0

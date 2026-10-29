@@ -1,0 +1,105 @@
+# QuickRPA dev 7fadfe3, 2026-10-27: routes with no known caller
+# callers: frontend 0d5e68d (deploy/fe-quickref), agent bd78884 (dev), qrlib, studio_workflow/services/bot_export.py
+# matched per path, not per method. A listed route is a question for the team, not a verdict.
+
+no caller: POST /agent/v1/runs/{run_id}/pause
+no caller: POST /agent/v1/runs/{run_id}/started
+no caller: GET /api/v1/agents/agent/rpa-link-key
+no caller: POST /api/v1/agents/agent/{token}/heartbeat
+no caller: GET /api/v1/agents/docker-install.sh
+no caller: GET /api/v1/agents/install/quickagent.service
+no caller: GET /api/v1/agents/install/service-linux.sh
+no caller: GET /api/v1/agents/workspaces/{workspace_id}/agents
+no caller: POST /api/v1/agents/{agent_id}/heartbeat
+no caller: GET /api/v1/agents/{agent_id}/metrics
+no caller: GET /api/v1/audit-logs
+no caller: GET /api/v1/auth-user-org/
+no caller: GET /api/v1/auth/user/me
+no caller: PATCH /api/v1/bot/storagebuckets/{pk}/bucket_data/{data_pk}/
+no caller: GET /api/v1/contenttypes/
+no caller: GET /api/v1/environment-request-file/{robot_id}/
+no caller: GET /api/v1/environment/{pk}/
+no caller: POST /api/v1/environment/{pk}/run/
+no caller: PATCH /api/v1/environment/{pk}/run/{run_pk}/
+no caller: POST /api/v1/environments/{environment_id}/recovery-key/export
+no caller: POST /api/v1/environments/{environment_id}/recovery-key/import
+no caller: POST /api/v1/environments/{environment_id}/recovery-key/import/begin
+no caller: GET /api/v1/exports/{export_id}
+no caller: GET /api/v1/exports/{export_id}/download
+no caller: GET /api/v1/me/organizations/
+no caller: POST /api/v1/me/organizations/{org_id}/switch/
+no caller: GET /api/v1/media/media/workflow/{workflow_id}
+no caller: GET /api/v1/media/media/{media_id}
+no caller: POST /api/v1/media/upload-to-storage
+no caller: POST /api/v1/node-packages/upload
+no caller: POST /api/v1/node-packages/{slug}/approve
+no caller: GET, POST /api/v1/nodetype
+no caller: GET /api/v1/nodetype/enum
+no caller: GET /api/v1/nodetype/{nodetype_id}
+no caller: GET /api/v1/nodetypes/code-files
+no caller: GET /api/v1/notification/exports/{pk}/download/
+no caller: GET /api/v1/oauth/google/authorize
+no caller: GET /api/v1/oauth/google/callback
+no caller: GET /api/v1/organizations/
+no caller: GET /api/v1/organizations/invitations/{token}/
+no caller: GET /api/v1/organizations/{org_id}/analytics/overview
+no caller: POST /api/v1/organizations/{org_id}/license/refresh/
+no caller: GET /api/v1/organizations/{org_pk}/audit-logs/
+no caller: PATCH /api/v1/organizations/{org_pk}/owner/
+no caller: PUT /api/v1/organizations/{org_pk}/users/{user_pk}/workspaces
+no caller: GET /api/v1/organizations/{pk}/dashboard/
+no caller: GET /api/v1/organizations/{pk}/reports/
+no caller: GET /api/v1/protected/
+no caller: GET /api/v1/public-key/
+no caller: GET /api/v1/rbac/users
+no caller: GET /api/v1/rbac/users/{user_id}
+no caller: PUT /api/v1/rbac/users/{user_id}/roles
+no caller: GET, PUT, PATCH /api/v1/robot/{robot_pk}/vaults/{vault_pk}/data/{data_pk}/
+no caller: GET /api/v1/robots/
+no caller: GET /api/v1/robots/{pk}/auth-requirements/
+no caller: PUT, DELETE /api/v1/robots/{pk}/environments/{env_id}/
+no caller: POST /api/v1/robots/{pk}/robot-version/{vpk}/activate/
+no caller: GET /api/v1/robots/{pk}/runs/{run_pk}/
+no caller: GET /api/v1/robots/{pk}/setup-checklist/
+no caller: GET /api/v1/robots/{pk}/setup-checklist/{section}/
+no caller: GET /api/v1/runs/{pk}/
+no caller: GET /api/v1/runs/{pk}/run-items/
+no caller: GET /api/v1/runs/{pk}/runitems/export/
+no caller: GET /api/v1/runs/{pk}/runitems/logs/download/
+no caller: GET /api/v1/runs/{pk}/runitems/{item_pk}/
+no caller: GET /api/v1/schedules
+no caller: POST /api/v1/services/group-promotions/{request_id}/cancel
+no caller: GET /api/v1/users/account-verify/{token}/
+no caller: GET /api/v1/users/me/notifications/
+no caller: PATCH, DELETE /api/v1/users/me/notifications/{notification_id}/
+no caller: PATCH /api/v1/users/me/updateprofile/
+no caller: GET /api/v1/vault-data/
+no caller: GET /api/v1/vault-data/{pk}/
+no caller: GET /api/v1/version
+no caller: GET, POST /api/v1/workflows/{workflow_id}/connections
+no caller: DELETE /api/v1/workflows/{workflow_id}/connections/{connection_id}
+no caller: GET /api/v1/workflows/{workflow_id}/export
+no caller: GET /api/v1/workflows/{workflow_id}/export-bot
+no caller: GET /api/v1/workflows/{workflow_id}/export-zip
+no caller: GET /api/v1/workflows/{workflow_id}/last-execution
+no caller: POST /api/v1/workflows/{workflow_id}/nodes/bulk-create
+no caller: DELETE /api/v1/workflows/{workflow_id}/nodes/bulk-delete
+no caller: GET /api/v1/workflows/{workflow_id}/nodes/{node_id}/last-execution
+no caller: PATCH /api/v1/workflows/{workflow_id}/session-mode
+no caller: POST /api/v1/workflows/{workflow_id}/stop
+no caller: GET /api/v1/workflows/{workflow_id}/versions/{version_id}/nodes
+no caller: GET /api/v1/workspaces/{pk}/
+no caller: GET /api/v1/workspaces/{workspace_id}/analytics/dashboard-stats
+no caller: GET /api/v1/workspaces/{workspace_id}/audit/stats
+no caller: POST /api/v1/workspaces/{workspace_id}/robots/logs/export
+no caller: GET /api/v1/workspaces/{workspace_id}/robots/schedules/heatmap
+no caller: GET /api/v1/workspaces/{workspace_id}/robots/storage/buckets
+no caller: GET /api/v1/workspaces/{workspace_id}/robots/{robot_id}/audit
+no caller: GET /api/v1/workspaces/{workspace_id}/robots/{robot_id}/logs
+no caller: GET, POST /api/v1/workspaces/{workspace_id}/robots/{robot_id}/storage/buckets
+no caller: DELETE /api/v1/workspaces/{workspace_id}/robots/{robot_id}/storage/buckets/{bucket_id}
+no caller: GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/audit
+no caller: POST /api/v1/workspaces/{ws_pk}/robots/{robot_pk}/restore/
+no caller: GET, POST /api/v1/workspaces/{ws_pk}/robots/{robot_pk}/vaults/
+no caller: PUT, DELETE /api/v1/workspaces/{ws_pk}/robots/{robot_pk}/vaults/{vault_pk}/
+healthkit routes: 100 of 401 path(s) have no known caller in 1112 client file(s) | matched per path, not per method

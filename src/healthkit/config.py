@@ -23,8 +23,22 @@ PROJECT_RULES = HOME / "rules"
 # code placed in a migrations folder is still reviewed (slice 005, D-019). And the
 # referee's own files.
 DEFAULT_EXCLUDE = ("**/migrations/[0-9][0-9][0-9][0-9]_*.py", ".healthkit/**")
-_TOP_KEYS = {"exclude", "allow"}
+# Python test files by the usual conventions: checks about runtime code skip them (they
+# read deleted rows, copy helpers, on purpose). Slices 008 and 011.
+TEST_FILE = re.compile(
+    r"(?:^|/)(?:tests?/|tests?(?:_[^/]*)?\.py$|test_[^/]*\.py$|[^/]*_tests?\.py$)"
+)
+_TOP_KEYS = {"exclude", "allow", "check", "django", "ruff", "spelling", "api"}
 _ALLOW_KEYS = {"rule", "path", "reason"}
+_CHECK_KEYS = {"name", "command", "paths", "reason", "timeout"}
+_DJANGO_KEYS = {"soft_delete_fields"}
+_RUFF_KEYS = {"extra"}
+_SPELLING_KEYS = {"ignore"}
+_API_KEYS = {"parameters", "deny"}
+_DENY_KEYS = {"user", "routes", "reason"}
+_ROUTE = re.compile(r"(?:\*|[A-Z]+) /\S*")  # "GET /people/students", "* /admin/**"
+_WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
+_RULE_CODE = re.compile(r"[A-Z]{1,4}[0-9]{0,4}")  # "D1", "ANN", "PLR2004"
 
 
 class ConfigError(Exception):
@@ -39,9 +53,37 @@ class Allow:
 
 
 @dataclass(frozen=True)
+class Check:
+    """A project's own guard command (slice 008). Run from the BASE branch's config only."""
+
+    name: str
+    command: tuple[str, ...]
+    paths: tuple[str, ...]
+    reason: str
+    timeout: int = 300
+
+
+@dataclass(frozen=True)
+class Deny:
+    """A user that must be refused on these routes (slice 021): the project's own access
+    policy, which healthkit checks but never invents."""
+
+    user: str  # a --token-env name
+    routes: tuple[str, ...]  # "METHOD /path" patterns, `*` one segment, `**` any
+    reason: str
+
+
+@dataclass(frozen=True)
 class Settings:
     exclude: tuple[str, ...] = DEFAULT_EXCLUDE
     allow: tuple[Allow, ...] = ()
+    checks: tuple[Check, ...] = ()
+    soft_delete_fields: tuple[str, ...] = ("is_deleted",)
+    ruff_extra: tuple[str, ...] = ()  # ruff checks the project chose (slice 013)
+    spelling_ignore: tuple[str, ...] = ()  # words the project accepts (slice 014)
+    # Real values for the API pack, e.g. ids; "${VAR}" read from the environment (016).
+    api_parameters: tuple[tuple[str, str | int | float | bool], ...] = ()
+    api_deny: tuple[Deny, ...] = ()
 
     def is_excluded(self, path: str) -> bool:
         return any(glob_match(path, pattern) for pattern in self.exclude)
@@ -55,14 +97,113 @@ def load(root: Path) -> Settings:
     if not file.is_file():
         return Settings()
     try:
-        data = tomllib.loads(file.read_text(encoding="utf-8-sig"))  # Windows editors add a BOM
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+        return parse(file.read_text(encoding="utf-8-sig"))  # Windows editors add a BOM
+    except UnicodeDecodeError as exc:
+        msg = f"{CONFIG.as_posix()}: {exc}"
+        raise ConfigError(msg) from exc
+
+
+def parse(text: str | None) -> Settings:
+    if text is None:
+        return Settings()
+    try:
+        data = tomllib.loads(text.removeprefix("\ufeff"))
+    except tomllib.TOMLDecodeError as exc:
         msg = f"{CONFIG.as_posix()}: {exc}"
         raise ConfigError(msg) from exc
     _no_unknown_keys(data, _TOP_KEYS, CONFIG.as_posix())
     exclude = [_path(p, "exclude") for p in _list(data.get("exclude", []), "exclude")]
     allow = [_allow(entry) for entry in _list(data.get("allow", []), "allow")]
-    return Settings(exclude=DEFAULT_EXCLUDE + tuple(exclude), allow=tuple(allow))
+    checks = [_check(entry) for entry in _list(data.get("check", []), "check")]
+    django = _table(data, "django", _DJANGO_KEYS)
+    fields = _list(django.get("soft_delete_fields", ["is_deleted"]), "soft_delete_fields")
+    extra = _list(_table(data, "ruff", _RUFF_KEYS).get("extra", []), "extra")
+    if bad := [
+        code for code in extra if not isinstance(code, str) or not _RULE_CODE.fullmatch(code)
+    ]:
+        msg = f'{CONFIG.as_posix()}: [ruff] extra must be ruff rule codes like "D1": {bad}'
+        raise ConfigError(msg)
+    words = _list(_table(data, "spelling", _SPELLING_KEYS).get("ignore", []), "ignore")
+    if bad := [w for w in words if not isinstance(w, str) or not _WORD.fullmatch(w)]:
+        msg = f"{CONFIG.as_posix()}: [spelling] ignore must be a list of words: {bad}"
+        raise ConfigError(msg)
+    api = _table(data, "api", _API_KEYS)
+    return Settings(
+        exclude=DEFAULT_EXCLUDE + tuple(exclude),
+        allow=tuple(allow),
+        checks=tuple(checks),
+        soft_delete_fields=tuple(_text(f, "soft_delete_fields") for f in fields),
+        ruff_extra=tuple(extra),
+        spelling_ignore=tuple(words),
+        api_parameters=_api_parameters(data),
+        api_deny=tuple(_deny(entry) for entry in _list(api.get("deny", []), "deny")),
+    )
+
+
+def _api_parameters(data: dict) -> tuple[tuple[str, str | int | float | bool], ...]:
+    values = _table(data, "api", _API_KEYS).get("parameters", {})
+    if not isinstance(values, dict) or any(
+        not isinstance(v, (str, int, float, bool)) for v in values.values()
+    ):
+        msg = f"{CONFIG.as_posix()}: [api.parameters] must be name = text or number"
+        raise ConfigError(msg)
+    return tuple(sorted(values.items()))
+
+
+def _deny(entry: object) -> Deny:
+    if not isinstance(entry, dict):
+        msg = f"{CONFIG.as_posix()}: each [[api.deny]] entry must be a table"
+        raise ConfigError(msg)
+    where = f"[[api.deny]] {entry.get('user')!r}"
+    _no_unknown_keys(entry, _DENY_KEYS, where)
+    for key in ("user", "reason"):
+        _text(entry.get(key), f"{where}: '{key}'")
+    routes = _list(entry.get("routes"), f"{where}: routes")
+    if not routes or any(not isinstance(r, str) or not _ROUTE.fullmatch(r.strip()) for r in routes):
+        msg = f'{CONFIG.as_posix()}: {where}: routes must be a list like ["GET /path"]'
+        raise ConfigError(msg)
+    return Deny(entry["user"].strip(), tuple(r.strip() for r in routes), entry["reason"].strip())
+
+
+def _table(data: dict, name: str, known: set[str]) -> dict:
+    table = data.get(name, {})
+    if not isinstance(table, dict):
+        msg = f"{CONFIG.as_posix()}: [{name}] must be a table"
+        raise ConfigError(msg)
+    _no_unknown_keys(table, known, f"[{name}]")
+    return table
+
+
+def _check(entry: object) -> Check:
+    if not isinstance(entry, dict):
+        msg = f"{CONFIG.as_posix()}: each [[check]] entry must be a table"
+        raise ConfigError(msg)
+    where = f"[[check]] {entry.get('name')!r}"
+    _no_unknown_keys(entry, _CHECK_KEYS, where)
+    for key in ("name", "reason"):
+        _text(entry.get(key), f"{where}: '{key}'")
+    command = entry.get("command")
+    if not isinstance(command, list) or not command:  # never a shell string
+        msg = f"{CONFIG.as_posix()}: {where}: 'command' must be a list of arguments"
+        raise ConfigError(msg)
+    timeout = entry.get("timeout", 300)
+    if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
+        msg = f"{CONFIG.as_posix()}: {where}: 'timeout' must be a positive number of seconds"
+        raise ConfigError(msg)
+    return Check(
+        name=entry["name"].strip(),
+        command=tuple(_text(arg, f"{where}: 'command'") for arg in command),
+        paths=tuple(_path(p, "paths") for p in _list(entry.get("paths", ["**"]), "paths")),
+        reason=entry["reason"].strip(),
+        timeout=timeout,
+    )
+
+
+def _text(value: object, where: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        msg = f"{CONFIG.as_posix()}: {where} must be non-empty text"
+        raise ConfigError(msg)
+    return value
 
 
 def _allow(entry: object) -> Allow:

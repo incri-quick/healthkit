@@ -13,6 +13,7 @@ standard that need understanding. Three levels:
 1. **Form** (case, layout, imports): already solved by ruff. Adopt, do not build.
 2. **Meaning** (names that tell the truth, `get_` has no side effects, booleans
    read as questions, no flag arguments): unsolved. healthkit's first target.
+   *(Priority superseded by D-021: meaning moves to the advisory AI layer.)*
 3. **Team conventions** (use the shared function, follow the house pattern, no
    copies of a rule): unsolved and project-specific. Where the costly bugs were.
 
@@ -132,6 +133,10 @@ pyscn found only exact copies. The tenancy helper `_get_workspace_or_404` exists
 modules, not by any trialled tool. Candidates: same-name functions across modules,
 and project rules that require the shared function.
 
+**Answered by slice 011 (2026-10-28):** measured four matchers on the real cases; only the
+same-name search finds drifted copies, so it ships (`copy-same-name`, advisory). Shape
+similarity (outside tools and healthkit's own) sees exact copies only and was dropped.
+
 ## D-016 Slice budget counts source, not tests — decided (2026-10-26)
 
 A slice stays under about 300 lines of **source**. Tests do not count against it:
@@ -183,6 +188,70 @@ match; helper modules and `__init__.py` are reviewed. Other frameworks' migratio
 folders (e.g. Alembic `migrations/versions/`) need one line in `.healthkit/config.toml`
 (D-004: Django first). Globs gained `[0-9]` / `[!0-9]` character classes.
 
+## D-020 First measured value — recorded (2026-10-27), answers D-008
+
+Replay on Susheel's users/auth review (slice 006): **9 of 45 findings caught (20%)** by
+rules not written from those incidents; 11/45 with them. Pattern findings 8 of 12; knowledge
+0 of 13; behaviour 1 of 15. Not fully out-of-sample (gate rules were chosen partly from the
+same fixes), so the next module Susheel reviews is the clean measurement. Next slices are
+ordered by this backlog: the f-string gap in `exception-text-in-reply` (small), then the
+API pack (catches AA-40, AA-73, AA-75 without a rule per bug).
+
+## D-021 The plan, revised by evidence — decided (2026-10-27), supersedes D-001's priority
+
+The replay (D-020) showed where the value is. Of Susheel's 45 findings: 13 knowledge
+(copies of shared code, token types, unused routes), 15 behaviour (3 of them 500s), 12
+pattern, 4 judgement/naming. Rules caught 8 of 12 pattern and 0 of 4 naming. D-001 named
+"names that lie" the first target; nobody chose to drop it, the work simply went
+elsewhere. This records the change instead of letting it happen silently.
+
+New order:
+
+1. **API pack** ("never a 500"): catches bad-input crashes without a rule per bug.
+   The f-string gap in `exception-text-in-reply` rides along.
+2. ~~**QuickRPA knowledge pack**: soft-delete reads, `assert_perm` scope, protected-field
+   `save()`, token reads outside their door: where QuickRPA's real bugs have been.~~
+   Renamed by D-022: **project checks + Django pack** (slice 008).
+3. **Live run on Susheel's next module**: the clean, out-of-sample measurement.
+4. Near-copy detection (D-015) and an unused-route check.
+5. **"Names that lie" moves from the gate to the advisory AI layer**: a rule cannot judge
+   meaning reliably (0 of 4 in the replay).
+6. Still pending, unchanged: baseline file, reviewer-style + machine-readable output,
+   module scorecard.
+
+Gains from rules written using the replay's misses are measured on new code only;
+scoring them on the 45 they came from would be circular.
+
+## D-022 healthkit never contains one project's knowledge — decided (2026-10-27)
+
+D-021 step 2 was named after a customer ("QuickRPA knowledge pack"), and the first slice
+008 draft followed it with a hard-coded list of QuickRPA's models. The owner stopped it:
+healthkit is a separate project, built for every project.
+
+- **healthkit ships** mechanisms (gate, project rules, project checks) and generic packs
+  (Python, Django, API). A pack rule works on a project it has never seen, with no names
+  from any one project in it.
+- **A project's own knowledge** (its model lists, allow entries, commands, extra rules)
+  lives in that project's `.healthkit/` folder, written by that team. This is what D-005
+  calls the project pack: it is never shipped in this repo.
+- **QuickRPA is the test bed**: where rules are measured and bugs are found, never what a
+  rule is built for. Its config is written in the test-bed clone, as a customer would.
+- A rule found in one project is measured on at least one other before it is called
+  generic; when no second project is available, it ships marked "measured on one project".
+- Slices are named after what they build, never after a customer.
+
+## D-023 Advisory findings: shown, never blocking — decided (2026-10-27)
+
+`soft-delete-read` found real bugs (one confirmed by running it on QuickRPA's local stack)
+but measured about half precision on code it was never tuned on (QuickRPA held-out 41%,
+mulearnbackend 55%), under the 70% slice 008 set for a rule that fails the gate.
+
+- A rule below that bar ships **advisory**: printed as `worth a look: ...` and counted in
+  the summary, never changing the exit code.
+- A rule moves from advisory to blocking only when it reaches the bar on unseen code from
+  at least two projects.
+- Advisory findings follow the same changed-lines, exclusion and allow rules as the rest.
+
 ---
 
 ## Open
@@ -192,15 +261,20 @@ folders (e.g. Alembic `migrations/versions/`) need one line in `.healthkit/confi
   plus a manual command.
 - **O-5 Windows support of Opengrep.** Answered by slice 001 (the tool trial).
 
-## Build plan (estimates, one person)
+## Build plan (original estimates, one person; status as of 2026-10-27)
 
-| Step | What | Time |
-|---|---|---|
-| M0 | Design doc + repo skeleton; settle O-1..O-5 | 1 day |
-| M1 | Tool trial on QuickRPA backend: keep or drop each candidate | 1 day |
-| M2 | Core: diff filter, finding format, baseline, gate, report, replay harness | 3–4 days |
-| M3 | Python pack: ruff + Opengrep adapters, names-that-lie and error-handling rules | 3–4 days |
-| M4 | Django pack + QuickRPA project pack | 3 days |
-| M5 | First replay score; first live run on Susheel's next module | 1 day |
-| M6 | API pack: Schemathesis "never a 500" sweep (moved up by D-017: next after slice 004) | 2 days |
-| M7 | Module scorecard (pyscn + coverage per app) | 2 days |
+| Step | What | Time | Status |
+|---|---|---|---|
+| M0 | Design doc + repo skeleton; settle O-1..O-5 | 1 day | done |
+| M1 | Tool trial on QuickRPA backend: keep or drop each candidate | 1 day | done (slice 001) |
+| M2 | Core: diff filter, finding format, baseline, gate, report, replay harness | 3–4 days | done (slices 002-006, 012, 017): baseline, folder scan, usage guide, JSON/Markdown/GitHub output |
+| M3 | Python pack: ruff + Opengrep adapters, names-that-lie and error-handling rules | 3–4 days | partly: adapters + 2 rules; names-that-lie moved to the AI layer (D-021) |
+| M4 | Django pack + project packs (each project's own `.healthkit/`, D-022) | 3 days | partly: `.healthkit/` (slice 004); project checks + `soft-delete-read` (advisory) done (slice 008) |
+| M5 | First replay score; first live run on Susheel's next module | 1 day | score done (slice 006); live run done (slice 009): 0 findings, recall needs a human review |
+| M6 | API pack: Schemathesis "never a 500" sweep | 2 days | done (slice 007): 6 real crashes in QuickRPA; database reset per run not built |
+| M7 | Module scorecard (pyscn + coverage per app) | 2 days | done (slice 018): facts per module from pyscn + healthkit; coverage measured and dropped (slice 017 branch notes, #7) |
+| — | Anti-silencing (exit 3, `--isolated`, suppressions, `.gitattributes`) | not planned | done (slices 004-005) |
+| — | Routes nobody calls (D-021 step 4, part 1) | not planned | done (slice 010): 5/5 incident routes, 80-90% precision on QuickRPA |
+| — | Copies (D-021 step 4, part 2; D-015) | not planned | done (slice 011): same-name helper (advisory) + racy cache counter rule; similarity engine measured and dropped |
+
+Revised order: D-021.

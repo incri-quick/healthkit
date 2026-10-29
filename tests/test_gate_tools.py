@@ -80,6 +80,33 @@ def test_exception_text_sent_to_the_caller_is_reported(repo, capsys):
     assert "users/services/password_reset.py:5: [opengrep exception-text-in-reply]" in out
 
 
+def test_every_rule_fixture_has_its_rule():
+    # Found in slice 011: `opengrep test` passes a fixture file that has no rule beside it,
+    # so a missing or misnamed rule would never fail the test above.
+    fixtures = {p.stem for p in RULES.glob("*.py")}
+    rules = {p.stem for p in RULES.glob("*.yaml")}
+    assert fixtures == rules
+
+
+def test_a_racy_cache_counter_is_reported(repo, capsys):
+    # QuickRPA users/services/password_reset.py:49 at 4cf0801^ (AA-03).
+    repo.write("users/services/password_reset.py", "def check(request):\n    return request\n")
+    base = repo.commit("base")
+    repo.write(
+        "users/services/password_reset.py",
+        "def check(request, limit=5, window=3600):\n"
+        '    cache_key = f"rl:pw_reset:{request}"\n'
+        "    count = cache.get(cache_key, 0)\n"
+        "    if count >= limit:\n"
+        "        raise ValueError(429)\n"
+        "    cache.set(cache_key, count + 1, timeout=window)\n",
+    )
+    repo.commit()
+
+    assert review(base) == 1
+    assert "password_reset.py:6: [opengrep cache-read-modify-write]" in capsys.readouterr().out
+
+
 def test_a_raw_json_body_read_is_reported(repo, capsys):
     # QuickRPA users/api/users.py:230 at 220f7b3 (AA-65).
     repo.write("users/api/users.py", "def obtain_token(request):\n    return request\n")

@@ -1,0 +1,383 @@
+# Answer key for the replay (slice 006). Drafted by Claude, reviewed by hand; Susheel
+# may correct it. QuickRPA backend history. "kind" is a JUDGEMENT:
+#   pattern   - visible in the shape of the code in one place
+#   structure - who imports whom
+#   knowledge - needs to know the project (shared helpers, token types, routes in use)
+#   behaviour - does it do the right thing (logic, races, limits, validation, wording of intent)
+#   judgement - naming meaning, module placement, wording, docs
+#   tests     - a missing or weak test; no code line to point at
+# source: "review" = his review file (deafb68^:docs/code-review/reviews/users-auth-a-tokens-password.md),
+#         "commit" = only the fix commit's message (AA-36+ live in his private notes).
+# Only explicit fixes ("code review AA-xx", "closes AA-xx", "(1 of 3)") are listed.
+# Not scored (no explicit fix commit, follow-up only, or another repo):
+#   AA-07, 08, 10, 11, 12, 17, 21, 23, 24, 25, 28, 29, 30, 31 (review, no explicit fix),
+#   AA-34 (frontend repo), AA-38 (follow-up only).
+
+# Rules written FROM these incidents: hits by them are excluded from Score B.
+[derived]
+"exception-text-in-reply" = "AA-15"
+"raw-json-body" = "AA-65"
+"api-above-services" = "AA-06"
+
+# JUDGED hits (added after the first run showed line overlap overcounts: a finding that
+# merely sits inside a rewritten or deleted block is a coincidence). An AA counts as
+# caught only by a rule listed here: one that names the problem ("direct") or points at
+# the exact line where the problem is visible ("pointer"). Each judged by reading the
+# flagged line at the fix's parent (slice 006 RESULTS lists them).
+[judged]
+"AA-06" = ["import-linter api-above-services"]  # direct (derived rule)
+"AA-13" = ["ruff RUF052"]                        # direct: `_pca` used as a dummy name
+"AA-15" = ["opengrep exception-text-in-reply", "ruff BLE001"]  # direct (derived) + pointer: the catch-all
+"AA-19" = ["ruff I001"]                          # direct: import hygiene
+"AA-32" = ["ruff F821"]                          # direct: dead code referencing an undefined name
+"AA-59" = ["ruff BLE001"]                        # pointer: `except Exception as e: raise HttpError(400, f"...{str(e)}")`
+"AA-63" = ["ruff PLC2701"]                       # direct: `from users.api.users import _login_throttle_ctx`
+"AA-65" = ["opengrep raw-json-body"]             # direct (derived rule)
+"AA-67" = ["ruff RUF052"]                        # direct: `_password`, `_ip`, `_db_counter`
+"AA-69" = ["ruff N814"]                          # direct: `AccessToken as _AT`
+"AA-74" = ["ruff BLE001"]                        # pointer: the `except Exception:` that hid whether revocation happened
+
+[[aa]]
+id = "AA-01"
+title = "the emailed reset link works as a full API session"
+source = "review"
+kind = "knowledge"
+fixes = ["49d5dc8"]
+
+[[aa]]
+id = "AA-02"
+title = "any session token can reset the password without the old password"
+source = "review"
+kind = "knowledge"
+fixes = ["49d5dc8"]
+
+[[aa]]
+id = "AA-03"
+title = "the reset-request throttle re-implements a shared helper, with three defects"
+source = "review"
+kind = "knowledge"
+fixes = ["4cf0801"]
+
+[[aa]]
+id = "AA-04"
+title = "change_password copies the password-write steps and skips one"
+source = "review"
+kind = "knowledge"
+fixes = ["4dcd181"]
+
+[[aa]]
+id = "AA-05"
+title = "apply_password_set is in the wrong module"
+source = "review"
+kind = "judgement"
+fixes = ["2252a17"]
+
+[[aa]]
+id = "AA-06"
+title = "the service layer depends on the API layer"
+source = "review"
+kind = "structure"
+fixes = ["4301ca4"]
+
+[[aa]]
+id = "AA-09"
+title = "flag arguments nobody sets"
+source = "review"
+kind = "knowledge"
+fixes = ["beb9780"]
+
+[[aa]]
+id = "AA-13"
+title = "_pca"
+source = "review"
+kind = "pattern"
+fixes = ["6bd4713"]
+
+[[aa]]
+id = "AA-14"
+title = "pending, mint, build_body"
+source = "review"
+kind = "judgement"
+fixes = ["27d9371"]
+
+[[aa]]
+id = "AA-15"
+title = "validate_password_match turns any exception into the reply text"
+source = "review"
+kind = "pattern"
+fixes = ["b2ab10f"]
+
+[[aa]]
+id = "AA-16"
+title = "check_password_reset_rate_limit raises (a check_ that raises)"
+source = "review"
+kind = "judgement"
+fixes = ["4cf0801"]
+
+[[aa]]
+id = "AA-18"
+title = "user-facing grammar"
+source = "review"
+kind = "judgement"
+fixes = ["553c9ee"]
+
+[[aa]]
+id = "AA-19"
+title = "import hygiene"
+source = "review"
+kind = "pattern"
+fixes = ["1f78697"]
+
+[[aa]]
+id = "AA-20"
+title = "docstrings and type hints"
+source = "review"
+kind = "pattern"
+fixes = ["32c3e28"]
+
+[[aa]]
+id = "AA-22"
+title = "the reset throttle has one test"
+source = "review"
+kind = "tests"
+fixes = ["4cf0801"]
+
+[[aa]]
+id = "AA-26"
+title = "inactive users get a reset email"
+source = "review"
+kind = "behaviour"
+fixes = ["c6ff101"]
+
+[[aa]]
+id = "AA-27"
+title = "nothing stops the next token mix-up (incl. an unchecked token reader)"
+source = "review"
+kind = "knowledge"
+fixes = ["3eebb3f", "acc6f1a", "02903ea"]
+
+[[aa]]
+id = "AA-32"
+title = "dead auth code"
+source = "review"
+kind = "pattern"
+fixes = ["198494c"]
+
+[[aa]]
+id = "AA-33"
+title = "the Forgot-password limit is per address only, not per account"
+source = "review"
+kind = "behaviour"
+fixes = ["54efa2d"]
+
+[[aa]]
+id = "AA-35"
+title = "retire PATCH /users/change-password/"
+source = "review"
+kind = "knowledge"
+fixes = ["11bfaa9"]
+
+[[aa]]
+id = "AA-36"
+title = "password writes that skip the stamp leave old sessions alive"
+source = "commit"
+kind = "knowledge"
+fixes = ["6b784d3"]
+
+[[aa]]
+id = "AA-37"
+title = "a refresh token from before a password change still refreshes"
+source = "commit"
+kind = "behaviour"
+fixes = ["1771d89"]
+
+[[aa]]
+id = "AA-39"
+title = "a static guard for password writes (guard only)"
+source = "commit"
+kind = "tests"
+fixes = ["acc6f1a"]
+
+[[aa]]
+id = "AA-40"
+title = "refresh answers 500 for a deactivated or deleted account"
+source = "commit"
+kind = "behaviour"
+fixes = ["0eb8d5c"]
+
+[[aa]]
+id = "AA-41"
+title = "a password change does not cancel a half-finished MFA sign-in"
+source = "commit"
+kind = "behaviour"
+fixes = ["383d4ae"]
+
+[[aa]]
+id = "AA-42"
+title = "unused /verifytoken/ that gave wrong answers"
+source = "commit"
+kind = "knowledge"
+fixes = ["3a6ed4c"]
+
+[[aa]]
+id = "AA-43"
+title = "a re-hash at sign-in can undo a password change (race)"
+source = "commit"
+kind = "behaviour"
+fixes = ["cb70080"]
+
+[[aa]]
+id = "AA-44"
+title = "saving an old copy of a user undoes a password change"
+source = "commit"
+kind = "behaviour"
+fixes = ["02c0e4d"]
+
+[[aa]]
+id = "AA-47"
+title = "an old copy undoes a deactivation, removal or demotion"
+source = "commit"
+kind = "behaviour"
+fixes = ["978246f"]
+
+[[aa]]
+id = "AA-48"
+title = "the profile edit can switch your own account off"
+source = "commit"
+kind = "behaviour"
+fixes = ["3eb56c0"]
+
+[[aa]]
+id = "AA-50"
+title = "self-edit without proof: password, email; old address not told"
+source = "commit"
+kind = "behaviour"
+fixes = ["61cf181", "193e224", "b6018bc"]
+
+[[aa]]
+id = "AA-56"
+title = "confirm-your-password checks have no shared wrong-password limit"
+source = "commit"
+kind = "behaviour"
+fixes = ["21c611c"]
+
+[[aa]]
+id = "AA-58"
+title = "a second, unused Studio sign-in"
+source = "commit"
+kind = "knowledge"
+fixes = ["b595c34", "6834f76"]
+
+[[aa]]
+id = "AA-59"
+title = "token-encrypted echoed decryption errors to anonymous callers"
+source = "commit"
+kind = "pattern"
+fixes = ["2e01db0"]
+
+[[aa]]
+id = "AA-60"
+title = "Studio logout said logged out and ended nothing"
+source = "commit"
+kind = "behaviour"
+fixes = ["2e01db0"]
+
+[[aa]]
+id = "AA-61"
+title = "five auth routes with no caller"
+source = "commit"
+kind = "knowledge"
+fixes = ["2e01db0"]
+
+[[aa]]
+id = "AA-62"
+title = "three sign-ins repeating the same steps"
+source = "commit"
+kind = "knowledge"
+fixes = ["e65d779"]
+
+[[aa]]
+id = "AA-63"
+title = "the Studio route imports private helpers from the users route file"
+source = "commit"
+kind = "pattern"
+# e65d779's message: AA-63 was "resolved by removing the extra sign-ins"; the Studio
+# sign-in (and its private imports) went in 6834f76.
+fixes = ["e65d779", "6834f76"]
+
+[[aa]]
+id = "AA-64"
+title = "the cookie-safety rule copied in several places"
+source = "commit"
+kind = "knowledge"
+fixes = ["81ca762"]
+
+[[aa]]
+id = "AA-65"
+title = "routes parse the JSON body themselves"
+source = "commit"
+kind = "pattern"
+fixes = ["7dbb9e4"]
+
+[[aa]]
+id = "AA-66"
+title = "sign-in-area limits written as numbers in the code"
+source = "commit"
+kind = "pattern"
+fixes = ["5910b4e"]
+
+[[aa]]
+id = "AA-67"
+title = "/token/'s locals named like unused variables (_password, _ip)"
+source = "commit"
+kind = "pattern"
+fixes = ["ca5c64e"]
+
+[[aa]]
+id = "AA-68"
+title = "the licence error misspelt"
+source = "commit"
+kind = "pattern"
+fixes = ["ca5c64e"]
+
+[[aa]]
+id = "AA-69"
+title = "small style fixes (aliased local imports, a swallow-all except)"
+source = "commit"
+kind = "pattern"
+fixes = ["ca5c64e", "81ca762"]
+
+[[aa]]
+id = "AA-71"
+title = "Studio sign-out pinned as a no-op by a test (test only)"
+source = "commit"
+kind = "tests"
+fixes = ["2e01db0"]
+
+[[aa]]
+id = "AA-72"
+title = "sign-out with a non-object body untested (test only)"
+source = "commit"
+kind = "tests"
+fixes = ["0559c9c"]
+
+[[aa]]
+id = "AA-73"
+title = "a form upload crashes routes that take JSON"
+source = "commit"
+kind = "behaviour"
+fixes = ["28a3c0b"]
+
+[[aa]]
+id = "AA-74"
+title = "sign-out does not say whether it cancelled the token"
+source = "commit"
+kind = "behaviour"
+fixes = ["4a45f36"]
+
+[[aa]]
+id = "AA-75"
+title = "the profile edit stores any type as a name"
+source = "commit"
+kind = "behaviour"
+fixes = ["7dbb9e4"]
