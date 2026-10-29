@@ -73,8 +73,12 @@ this as a pass), **3** only a settings change that needs a person's approval.
   With one user, most routes refused means the token did not work: exit 2. With several,
   only a token that works on nothing is exit 2, because a plain user is refused on every
   admin route by design.
+- **Shallow routes are listed per user**: routes with an id in the path that only got
+  "not found", because no real id was known. Give real ids in `[api.parameters]`.
 - Tokens are read from environment variables, never typed on the command line, and never
   written to the reports.
+- The report folder (`--report-dir`, default a temp folder) ignores itself in git, so it
+  is never committed by accident. It holds every request sent: delete it when done.
 
 ## The project's `.healthkit/` folder
 

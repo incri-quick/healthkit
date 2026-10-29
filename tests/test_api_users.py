@@ -55,7 +55,7 @@ def api(url: str, report: Path, *tokens: str) -> int:
 
 def test_a_real_id_from_the_project_reaches_the_route(repo, tenant_api, capsys, tmp_path):
     api(tenant_api, tmp_path / "without", "HK_TOKEN_A")
-    assert "/items/{item_id}" not in capsys.readouterr().out  # guessed ids: all 404
+    assert "/items/{item_id}: [" not in capsys.readouterr().out  # guessed ids: all 404
 
     repo.write(".healthkit/config.toml", "[api.parameters]\nitem_id = 7\n")
     code = api(tenant_api, tmp_path / "with", "HK_TOKEN_A")

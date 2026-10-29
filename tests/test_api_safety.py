@@ -145,4 +145,4 @@ def test_requests_sent_without_login_on_purpose_are_not_refusals(tmp_path):
         encoding="utf-8",
     )
 
-    assert schemathesis.refused_by_login({}, events) == ["GET /admin"]
+    assert schemathesis.refused_by_login({}, schemathesis.read_events(events)) == ["GET /admin"]

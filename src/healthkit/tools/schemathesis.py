@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -22,6 +22,7 @@ from healthkit.findings import Finding, ToolError
 NAME = "schemathesis"
 COMMAND = ["uvx", "schemathesis@4.32.5"]
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+STATEFUL = "Stateful tests"  # the report's name for every stateful-phase failure
 AUTH_FILE = "users.wfc.json"  # holds the tokens: removed after every run (slice 016)
 
 
@@ -53,6 +54,10 @@ def run(  # noqa: PLR0913 - each argument is one setting of the run
     to the token. Reads only (GET) unless `writes`: a run that writes changes data
     (another project's run deactivated a user and reversed a payment)."""
     report_dir = report_dir.resolve()
+    report_dir.mkdir(parents=True, exist_ok=True)
+    # Git ignores the folder wherever it is: another project's 38 MB of reports sat in its
+    # repo, one `git add .` from being committed (slice 020).
+    (report_dir / ".gitignore").write_bytes(b"*\n")
     if "://" not in schema:  # a file: absolute, because the run starts in report_dir
         schema = str(Path(schema).resolve())
     several = len(users) > 1
@@ -87,7 +92,11 @@ def run(  # noqa: PLR0913 - each argument is one setting of the run
         ],
         tested=max(data.get("operations", {}).get("tested", 0) for data in reports),
         refused={name: refused for name, (_, _, refused) in runs.items() if refused},
-        shallow=max(len(data.get("warnings", {}).get("missing_test_data", [])) for data in reports),
+        shallow={
+            name: shallow
+            for name, (_, data, _) in runs.items()
+            if (shallow := list(data.get("warnings", {}).get("missing_test_data", [])))
+        },
     )
 
 
@@ -150,35 +159,73 @@ def _run_as(  # noqa: PLR0913 - each argument is one setting of the run
     except (OSError, ValueError) as exc:
         msg = f"schemathesis gave no readable report (exit {result.returncode})"
         raise ToolError(msg) from exc
-    refused = refused_by_login(data, events)
+    log = read_events(events)
+    refused = refused_by_login(data, log)
     no_silent_pass(data, refused, name if len(users) > 1 else None)
-    findings = [
-        Finding(tool=NAME, rule=failure["code"], path=operation, line=0, message=failure["title"])
-        for failure in data.get("failures", [])
-        for operation in failure.get("operations", [])
-    ]
-    return findings, data, refused
+    return failures(data, log), data, refused
 
 
-def refused_by_login(data: dict, events: Path) -> list[str]:
-    """Operations that answered this user's requests only with 401 or 403. Measured (slice
-    019): Schemathesis's own `missing_auth` counts 401 only, so a plain user's 403 on every
-    admin route read as tested. Its event log records each response's status, the token as
-    "[Filtered]"; requests it sent with no login on purpose carry no Authorization header."""
-    statuses: dict[str, set[int]] = {}
+@dataclass
+class Events:
+    """What the event log (`--report ndjson`) tells that the JSON report does not."""
+
+    statuses: dict[str, set[int]] = field(default_factory=dict)  # per operation, with login
+    stateful: list[Finding] = field(default_factory=list)  # stateful failures, by route
+
+
+def read_events(path: Path) -> Events:
+    """Measured (slices 019, 020): each response's status, the token as "[Filtered]";
+    requests sent with no login on purpose carry no Authorization header; a failed check
+    of the stateful phase names its route in `failure_info.failure.operation`."""
+    events = Events()
     try:
-        lines = events.read_text(encoding="utf-8").splitlines()
+        lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
-        lines = []
+        return events
     for line in lines:
-        scenario = json.loads(line).get("ScenarioFinished") if line.strip() else None
-        recorder = (scenario or {}).get("recorder", {})
+        scenario = (json.loads(line).get("ScenarioFinished") if line.strip() else None) or {}
+        recorder = scenario.get("recorder", {})
         for interaction in (recorder.get("interactions") or {}).values():
             headers = {h.lower() for h in interaction.get("request", {}).get("headers", {})}
             response = interaction.get("response")
             if "authorization" in headers and response:
-                statuses.setdefault(recorder["label"], set()).add(response["status_code"])
-    denied = {label for label, codes in statuses.items() if codes <= {401, 403}}
+                events.statuses.setdefault(recorder["label"], set()).add(response["status_code"])
+        if scenario.get("phase") != "stateful":
+            continue
+        for check in (c for checks in (recorder.get("checks") or {}).values() for c in checks):
+            failure = (check.get("failure_info") or {}).get("failure") or {}
+            if check.get("status") == "failure" and failure.get("operation"):
+                events.stateful.append(
+                    Finding(
+                        tool=NAME,
+                        rule=failure["code"],
+                        path=failure["operation"],
+                        line=0,
+                        message=failure["title"],
+                    )
+                )
+    return events
+
+
+def failures(data: dict, events: Events) -> list[Finding]:
+    """The report's failures, one per operation. Its `Stateful tests` line names no route
+    (it hid `GET /assignments/` in another project's run), so it is replaced by the routes
+    the event log names, and kept when the log names none: never drop a failure."""
+    found = [
+        Finding(tool=NAME, rule=failure["code"], path=operation, line=0, message=failure["title"])
+        for failure in data.get("failures", [])
+        for operation in failure.get("operations", [])
+    ]
+    if events.stateful:
+        found = [f for f in found if f.path != STATEFUL] + events.stateful
+    return list(dict.fromkeys(found))
+
+
+def refused_by_login(data: dict, events: Events) -> list[str]:
+    """Operations that answered this user's requests only with 401 or 403. Measured (slice
+    019): Schemathesis's own `missing_auth` counts 401 only, so a plain user's 403 on every
+    admin route read as tested."""
+    denied = {label for label, codes in events.statuses.items() if codes <= {401, 403}}
     return sorted(denied | set(data.get("warnings", {}).get("missing_auth", [])))
 
 
@@ -216,7 +263,7 @@ class ApiRun:
     findings: list[Finding]
     tested: int
     refused: dict[str, list[str]]  # per user: answered only 401/403, not tested behind it
-    shallow: int  # no valid sample data (e.g. real IDs): tested only on the surface
+    shallow: dict[str, list[str]]  # per user: no valid sample data (e.g. real IDs)
 
 
 def no_silent_pass(data: dict, refused: list[str], user: str | None = None) -> None:

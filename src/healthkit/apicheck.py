@@ -69,12 +69,10 @@ def run(args) -> int:  # noqa: ANN001 - argparse.Namespace
     allowed = len(result.findings) - len(findings)
     for finding in sorted(set(findings), key=lambda f: (f.path, f.rule)):
         print(f"{finding.path}: [{finding.tool} {finding.rule}] {finding.message}")
-    # Never silent: name what the login kept out (slice 007), for each user (slice 019).
-    for name, refused in result.refused.items():
-        who = f" as {name}" if len(users) > 1 else ""
-        print(f"not tested (refused by login){who}: {len(refused)} operation(s)")
-        for operation in refused:
-            print(f"  {operation}")
+    # Never silent: name what the login kept out (slice 007), for each user (slice 019),
+    # and what had no valid sample data (slice 020).
+    _per_user("not tested (refused by login)", result.refused, several=len(users) > 1)
+    _per_user("shallow (no valid sample data)", result.shallow, several=len(users) > 1)
     routes = len({f.path for f in findings})
     verdict = f"{routes} route(s) failed a check" if findings else "no server errors found"
     parts = [f"healthkit api: {verdict} in {result.tested} operation(s)"]
@@ -83,10 +81,19 @@ def run(args) -> int:  # noqa: ANN001 - argparse.Namespace
     )
     parts += ["writes on: this run may have changed data"] if args.allow_writes else ["reads only"]
     parts += [f"allowed: {allowed}"] if allowed else []
-    parts += [f"shallow (no valid sample data): {result.shallow}"] if result.shallow else []
+    shallow = len({op for operations in result.shallow.values() for op in operations})
+    parts += [f"shallow (no valid sample data): {shallow}"] if shallow else []
     parts += [f"reports: {report_dir}"]
     print(" | ".join(parts))
     return 1 if findings else 0
+
+
+def _per_user(title: str, operations: dict[str, list[str]], *, several: bool) -> None:
+    for name, listed in operations.items():
+        who = f" as {name}" if several else ""
+        print(f"{title}{who}: {len(listed)} operation(s)")
+        for operation in listed:
+            print(f"  {operation}")
 
 
 def _settings() -> config.Settings:
