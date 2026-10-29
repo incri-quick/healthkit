@@ -84,6 +84,8 @@ this as a pass), **3** only a settings change that needs a person's approval.
   ```
 
   Any 2xx answer to that user on a matching route is a finding: `[policy must-refuse]`.
+  It says how big the largest answer was, `got 200 (469 records)` or `got 200 (empty)`,
+  so a real leak stands out from an empty list. Only the count is shown, never the data.
   A 401 or 403 is "refused as required". Anything else (only 404, only 422) is listed
   under `access policy not checked`, because a 404 can mean a guessed id as easily as a
   refusal. A route pattern that matches nothing tested is exit 2, so a typo never passes.
@@ -93,8 +95,11 @@ this as a pass), **3** only a settings change that needs a person's approval.
   "not found", because no real id was known. Give real ids in `[api.parameters]`.
 - Tokens are read from environment variables, never typed on the command line, and never
   written to the reports.
-- The report folder (`--report-dir`, default a temp folder) ignores itself in git, so it
-  is never committed by accident. It holds every request sent: delete it when done.
+- The summary counts each kind apart: `server errors`, `access leaks`,
+  `cross-user reads`, `other`.
+- The reports hold every answer the API gave, **personal data included**. By default they
+  go to a temp folder that is deleted when the run ends. With `--report-dir` they are
+  kept (the folder ignores itself in git); delete it yourself when done.
 
 ## The project's `.healthkit/` folder
 

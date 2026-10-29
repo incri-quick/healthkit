@@ -30,9 +30,14 @@ class PolicyRun:
 
 
 def check(
-    rules: tuple[Deny, ...], statuses: dict[str, dict[str, set[int]]], *, writes: bool
+    rules: tuple[Deny, ...],
+    statuses: dict[str, dict[str, set[int]]],
+    *,
+    writes: bool,
+    sizes: dict[str, dict[str, int]] | None = None,
 ) -> PolicyRun:
-    """`statuses`: per user, per operation, what that user's login was answered."""
+    """`statuses`: per user, per operation, what that user's login was answered.
+    `sizes`: the largest 2xx answer's records, the same way (slice 022)."""
     run = PolicyRun()
     for rule in rules:
         if rule.user not in statuses:
@@ -53,13 +58,16 @@ def check(
                         f"[[api.deny]] {rule.user}: {pattern} matches no route tested as that user"
                     )
             for operation in matched:
-                _judge(run, rule, operation, answered[operation])
+                size = (sizes or {}).get(rule.user, {}).get(operation)
+                _judge(run, rule, operation, answered[operation], size)
     return run
 
 
-def _judge(run: PolicyRun, rule: Deny, operation: str, codes: set[int]) -> None:
+def _judge(run: PolicyRun, rule: Deny, operation: str, codes: set[int], size: int | None) -> None:
     if leaked := sorted(code for code in codes if 200 <= code < 300):  # noqa: PLR2004 - 2xx
-        message = f"{rule.user} got {leaked[0]}, the policy says refused: {rule.reason}"
+        # How big the answer was tells a real leak from an empty list (slice 022).
+        amount = {None: "", 0: " (empty)", 1: " (1 record)"}.get(size, f" ({size} records)")
+        message = f"{rule.user} got {leaked[0]}{amount}, the policy says refused: {rule.reason}"
         run.findings.append(
             Finding(tool="policy", rule="must-refuse", path=operation, line=0, message=message)
         )

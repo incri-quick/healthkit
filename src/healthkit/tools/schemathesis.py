@@ -10,6 +10,8 @@ Measured before coding (slice 007 SPEC):
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import subprocess
@@ -97,7 +99,8 @@ def run(  # noqa: PLR0913 - each argument is one setting of the run
             for name, run in runs.items()
             if (shallow := list(run.data.get("warnings", {}).get("missing_test_data", [])))
         },
-        statuses={name: run.statuses for name, run in runs.items()},
+        statuses={name: run.events.statuses for name, run in runs.items()},
+        sizes={name: run.events.sizes for name, run in runs.items()},
     )
 
 
@@ -106,7 +109,7 @@ class _UserRun:
     findings: list[Finding]
     data: dict  # the JSON report
     refused: list[str]  # operations the login refused
-    statuses: dict[str, set[int]]  # per operation, answers to this user's login
+    events: Events  # what this user's login was answered
 
 
 def _run_as(  # noqa: PLR0913 - each argument is one setting of the run
@@ -170,7 +173,7 @@ def _run_as(  # noqa: PLR0913 - each argument is one setting of the run
     log = read_events(events)
     refused = refused_by_login(data, log)
     no_silent_pass(data, refused, name if len(users) > 1 else None)
-    return _UserRun(failures(data, log), data, refused, log.statuses)
+    return _UserRun(failures(data, log), data, refused, log)
 
 
 @dataclass
@@ -178,6 +181,7 @@ class Events:
     """What the event log (`--report ndjson`) tells that the JSON report does not."""
 
     statuses: dict[str, set[int]] = field(default_factory=dict)  # per operation, with login
+    sizes: dict[str, int] = field(default_factory=dict)  # per operation, largest 2xx
     stateful: list[Finding] = field(default_factory=list)  # stateful failures, by route
 
 
@@ -198,6 +202,7 @@ def read_events(path: Path) -> Events:
             response = interaction.get("response")
             if "authorization" in headers and response:
                 events.statuses.setdefault(recorder["label"], set()).add(response["status_code"])
+                _note_size(events, recorder["label"], response)
         if scenario.get("phase") != "stateful":
             continue
         for check in (c for checks in (recorder.get("checks") or {}).values() for c in checks):
@@ -213,6 +218,38 @@ def read_events(path: Path) -> Events:
                     )
                 )
     return events
+
+
+def _note_size(events: Events, operation: str, response: dict) -> None:
+    """The largest 2xx answer per operation, in records (slice 022): only the count is
+    kept, never the data."""
+    if not 200 <= response["status_code"] < 300:  # noqa: PLR2004 - 2xx
+        return
+    content = response.get("content")
+    try:
+        body = base64.b64decode(content["$base64"]) if isinstance(content, dict) else b""
+    except (KeyError, TypeError, binascii.Error):
+        return
+    count = records(body)
+    if count is not None and count >= events.sizes.get(operation, 0):
+        events.sizes[operation] = count
+
+
+def records(body: bytes) -> int | None:
+    """How many records an answer holds: a list's items; for an object, its longest list
+    (`{"items": [...], "total": 469}`), else 1; `{}` and `[]` are 0. Not JSON: None."""
+    try:
+        value = json.loads(body)
+    except ValueError:
+        return None
+    if value is None:
+        return 0
+    if isinstance(value, list):
+        return len(value)
+    if isinstance(value, dict):
+        lists = [len(v) for v in value.values() if isinstance(v, list)]
+        return max(lists) if lists else min(len(value), 1)
+    return 1
 
 
 def failures(data: dict, events: Events) -> list[Finding]:
@@ -274,6 +311,7 @@ class ApiRun:
     shallow: dict[str, list[str]]  # per user: no valid sample data (e.g. real IDs)
     # Per user, per operation: the statuses answered to that user's login (slice 021).
     statuses: dict[str, dict[str, set[int]]] = field(default_factory=dict)
+    sizes: dict[str, dict[str, int]] = field(default_factory=dict)  # slice 022
 
 
 def no_silent_pass(data: dict, refused: list[str], user: str | None = None) -> None:
