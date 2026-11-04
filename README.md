@@ -27,12 +27,27 @@ Run them from inside the project's git repository.
 
 | Command | What it does |
 |---|---|
-| `healthkit review --base main` | Checks only the lines your branch changed since `main`. Use before you push. |
+| `healthkit review --base main` | Checks only the lines your branch **committed** since `main`. Use before you push. |
+| `healthkit review --base main --working-tree` | The same, but also your uncommitted work: staged, unstaged and new files. Use before you commit. |
 | `healthkit scan users/` | Checks **every** line of the Python files in a folder. Use to check one module. |
 | `healthkit baseline users/` | Remembers today's findings in a folder, so later runs show only **new** ones. |
 | `healthkit api --schema <url> --token-env TOKEN_A` | Sends good and bad input to every API route; any server error (500) is a finding. Reads only (GET) unless you add `--allow-writes`. Give `--token-env` once per user: each user is tested, and with two or more it also checks that one user cannot read another's objects. Local servers only. |
 | `healthkit routes --schema <url> --callers <folder>` | Lists API routes that no client code calls. |
 | `healthkit scorecard [folders]` | One row of facts per module, the ones needing attention first: files, lines, too-complex functions, the most complex one, problems and hints. |
+
+### Committed work and uncommitted work
+
+`review` checks commits, because commits are what get pushed and merged. It never
+passes silently over work you have not committed:
+
+- If a file it checks also has uncommitted edits, it stops with **exit 2** and names the
+  file: the checkers read the file on disk, so its committed lines cannot be checked.
+  Commit or stash the edits, or add `--working-tree`.
+- If nothing is committed but you have uncommitted Python work, it stops with exit 2 and
+  tells you to use `--working-tree`, instead of saying "nothing to review".
+- Other uncommitted files are listed as `not reviewed (uncommitted)`.
+- An uncommitted change to `.healthkit/` always needs a person's approval, in both modes:
+  the settings on disk are the ones that run.
 
 ### Output formats
 
@@ -163,6 +178,10 @@ When asked to check a module with healthkit:
    design, naming, missing tests. That is where your review adds value.
 5. For every problem you find that healthkit did not, propose one line for
    `.healthkit/misses.md`.
+
+When checking your own changes: before a commit, run
+`healthkit review --base <main branch> --working-tree`; before a push, run it without
+`--working-tree`. Exit 2 means it could not check: say why, never report a pass.
 
 Never:
 - edit anything in `.healthkit/` to make a finding go away;

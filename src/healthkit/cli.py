@@ -20,6 +20,7 @@ from healthkit.tools import codespell, copies, django, importlinter, opengrep, o
 GATE_TOOLS = (ruff, opengrep, importlinter, django, copies, codespell, options)  # D-014
 BASELINE = "remember today's findings in these folders, so only new ones show"
 FORMAT = "text (default), json (AI, scripts), markdown (a PR comment), github (Actions)"
+WORKING_TREE = "also check uncommitted work: staged, unstaged and new files (before a commit)"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     review = commands.add_parser("review", help="check the lines this branch changed")
     review.add_argument("--base", required=True, help="branch or commit to compare against")
     review.add_argument("--format", choices=report.FORMATS, default="text", help=FORMAT)
+    review.add_argument("--working-tree", action="store_true", help=WORKING_TREE)
     for name, text in (("scan", "check every line of these folders"), ("baseline", BASELINE)):
         command = commands.add_parser(name, help=text)
         command.add_argument("folders", nargs="*", default=["."], help="default: the repo")
@@ -46,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         return _scorecard(Path.cwd(), args.folders, args.format)
     if args.command in {"scan", "baseline"}:
         return _scan(Path.cwd(), args.folders, write=args.command == "baseline", fmt=args.format)
-    return _review(Path.cwd(), args.base, args.format)
+    return _review(Path.cwd(), args.base, args.format, working_tree=args.working_tree)
 
 
 @dataclass
@@ -57,10 +59,11 @@ class _Run:
     failed: bool = False
 
 
-def _review(cwd: Path, base: str, fmt: str = "text") -> int:
+def _review(cwd: Path, base: str, fmt: str = "text", *, working_tree: bool = False) -> int:
     try:
         root = gitdiff.repo_root(cwd)
-        changed = gitdiff.changed_lines(root, base)
+        changed = gitdiff.changed_lines(root, base, working_tree=working_tree)
+        uncommitted = gitdiff.uncommitted(root)
         referee_changes = gitdiff.files_touched_under(root, base, config.HOME.as_posix())
         settings = config.load(root)
         # Commands from the BASE branch only: a branch's new command must not run before a
@@ -72,6 +75,10 @@ def _review(cwd: Path, base: str, fmt: str = "text") -> int:
         return 2
     python_files = sorted(path for path in changed if path.endswith((".py", ".pyi")))
     reviewed = [path for path in python_files if not settings.is_excluded(path)]
+    dirty = [p for p in uncommitted if p.endswith((".py", ".pyi")) and not settings.is_excluded(p)]
+    if not working_tree and (refusal := _uncommitted_refusal(reviewed, dirty)):
+        print(f"healthkit: {refusal}", file=sys.stderr)
+        return 2
     run = _run_tools(root, reviewed) if reviewed else _Run()
     project = checks.run(root, approved.checks, sorted(changed))
 
@@ -102,6 +109,7 @@ def _review(cwd: Path, base: str, fmt: str = "text") -> int:
     else:
         summary = f"healthkit: no known problems on changed lines in {len(reviewed)} file(s)"
     parts = [summary]
+    parts += ["working tree (uncommitted changes included)"] if working_tree else []
     if reviewed or run.ran:
         parts.append(f"ran: {', '.join(run.ran) or 'nothing'}")
     parts += [f"skipped: {'; '.join(run.skipped)}"] if run.skipped else []
@@ -112,10 +120,31 @@ def _review(cwd: Path, base: str, fmt: str = "text") -> int:
     parts += [f"worth a look: {len(advisory)}"] if advisory else []
     parts += [f"baselined: {remembered}"] if remembered else []
     parts += [f"needs human approval: {len(approvals)} item(s)"] if approvals else []
+    if others := [p for p in dirty if p not in reviewed and not working_tree]:
+        parts += [f"not reviewed (uncommitted): {len(others)} file(s): {', '.join(others)}"]
     code = 2 if run.failed else 1 if new else 3 if approvals else 0
     result = report.Report("review", code, parts, problems, advisory, failed_checks)
     result.tails, result.approvals = project.tails, approvals
     return report.emit(result, fmt)
+
+
+def _uncommitted_refusal(reviewed: list[str], dirty: list[str]) -> str | None:
+    """Committed-only review must never pass silently over uncommitted work (slice 023).
+    Measured: an uncommitted edit in a reviewed file moved a committed problem off the
+    committed line numbers (missed, exit 0); with nothing committed it said "nothing to
+    review", exit 0, while the work sat uncommitted."""
+    if stale := [p for p in reviewed if p in dirty]:
+        return (
+            f"{len(stale)} changed file(s) also have uncommitted changes, so their "
+            f"committed lines cannot be checked: {', '.join(stale)}. Commit or stash them, "
+            f"or use --working-tree."
+        )
+    if dirty and not reviewed:
+        return (
+            f"nothing committed to review, but {len(dirty)} uncommitted Python file(s): "
+            f"{', '.join(dirty)}. Use --working-tree to check them."
+        )
+    return None
 
 
 def _scan(cwd: Path, folders: list[str], *, write: bool, fmt: str = "text") -> int:
