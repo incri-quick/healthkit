@@ -252,6 +252,67 @@ mulearnbackend 55%), under the 70% slice 008 set for a rule that fails the gate.
   at least two projects.
 - Advisory findings follow the same changed-lines, exclusion and allow rules as the rest.
 
+## D-024 The API check reads only, and tests every user — decided (2026-10-29), slice 019
+
+Recorded late (2026-11-04 catch-up). Another project's run deactivated a user and
+reversed a payment with no warning, and with two tokens fuzzed only the first.
+
+- Default: GET only, with Schemathesis's "unexpected method" probes switched off
+  (measured: `--include-method GET` alone still sent DELETE and POST). Writes need
+  `--allow-writes`, and the summary says the run may have changed data.
+- One run per `--token-env`, named by the variable; findings name the users who hit them.
+- "Refused" counts 401 **and 403**, read from Schemathesis's event log (its own warning
+  counts 401 only). One user: most routes refused is exit 2. Several users: only a token
+  that works on nothing is exit 2.
+
+## D-025 The access policy: the project's rules, healthkit's proof — decided (2026-10-29), slice 021
+
+Recorded late (2026-11-04 catch-up). Role leaks (a teacher reading every parent) were
+invisible: only the project knows who must be refused where (D-022).
+
+- `[[api.deny]]` lists routes a user must be refused on. Any 2xx to that user is a
+  finding; any 401/403 is refused as required; anything else is "not checked". A 404 is
+  never proof, since a guessed id answers 404 too.
+- A pattern that matches nothing tested is exit 2, so a typo never passes.
+- It catches a route open to the wrong role, never a right role seeing too many rows.
+- Open since: O-6.
+
+## D-026 API reports are personal data — decided (2026-10-29), slices 020 and 022
+
+Recorded late (2026-11-04 catch-up). A run's report held every answer the API gave
+(469 parents' details) and sat in the repo, one `git add .` from being committed.
+
+- Every report folder writes its own `.gitignore` (`*`).
+- Without `--report-dir`, the temp folder is deleted when the run ends, failed runs too.
+- Output prints counts (records in a leak), never the data. Tokens never reach a report.
+
+## D-027 The hold, and how building restarts — decided (2026-10-29, restarted 2026-11-04)
+
+From 2026-10-29 the team used healthkit and feedback went to `FEEDBACK.md`; nothing was
+built. On 2026-11-04 the owner restarted building, limited to what more than one source
+asked for (`FEEDBACK.md` section 2d):
+
+- **Phase 1, the core:** `review` never passes silently on uncommitted work
+  (`--working-tree`); quieter output (style folded, `allowed`/`baselined` named,
+  SQLAlchemy string type names); the small bugs QuickRPA hit (project rules and test
+  files, rule severity, BOM in rule files, callables passed to `asyncio.to_thread`, the
+  baseline pointing at the wrong copy).
+- **Phase 2, the API check:** check its own setup first (expected user names, working
+  tokens); ids per route or per user, kept out of the committed config; 409 to a
+  must-refuse user (O-6).
+- **Not yet**, until more sources ask: scenario runner, write testing on a throwaway
+  database, role comparison, a SQLAlchemy/FastAPI pack, miss-to-rule drafts, speed,
+  frontend support.
+
+## D-028 Core budget about 2,500 lines — decided (2026-11-04), supersedes rule 2's 1,500
+
+The source reached 2,456 non-blank lines by slice 022 against a 1,500 budget, never
+reported and never asked about (rule 2 and the stop-and-ask list both broken). The
+owner accepted 2,500 when restarting (proposed, "proceed").
+
+- Every slice reports the count (`src/`, non-blank lines) in its RESULTS.
+- Crossing 2,500 is a stop-and-ask, not a footnote.
+
 ---
 
 ## Open
@@ -260,6 +321,9 @@ mulearnbackend 55%), under the 70% slice 008 set for a rule that fails the gate.
 - **O-4 Where it runs while GitHub Actions is blocked.** Suggested: git pre-push hook
   plus a manual command.
 - **O-5 Windows support of Opengrep.** Answered by slice 001 (the tool trial).
+- **O-6 What else counts as a leak to a must-refuse user?** QuickRPA asks for a 409 to be a
+  finding (it revealed state before the permission check), and counts a 404 as a refusal;
+  D-025 treats only-404 as "not checked". To settle in phase 2.
 
 ## Build plan (original estimates, one person; status as of 2026-10-27)
 

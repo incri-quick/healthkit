@@ -5,6 +5,46 @@ Newest first.
 
 ---
 
+## L-026 The working agreement slipped quietly when slices went fast (2026-11-04)
+
+Checked against `CLAUDE.md` after slice 022: no decisions or lessons were written for
+slices 019-022, the source grew to 2,456 lines against a 1,500 budget without a word,
+no fresh agent had checked a slice since 009 (mutant tests were used instead), and rule 8
+("Claude never pushes or merges") no longer matched what the owner had asked for. Nobody
+decided to drop any of it; each slice just skipped one more step.
+
+**Changed:** each slice's RESULTS ends with the checklist: line count, D-/L- entries
+written, and the fresh-agent check (done, or why not). Rule 8 now says what is true.
+
+## L-025 One good run is not daily use (2026-10-30)
+
+The school project scored healthkit 76 after one access-policy run, then 72 after a week
+of using it on every fix: `review`, the original core, said "no known problems" on
+branches with real bugs and did not see uncommitted work. The API check, used once,
+looked better than the part used every day.
+
+**Changed:** a feature is judged by repeated real use (`FEEDBACK.md`), not by its best
+run.
+
+## L-024 Escapes inside shell-fed edit scripts get eaten (2026-10-29)
+
+Twice in two slices, a Python edit script passed through a bash heredoc turned `\n` into
+a real newline inside a string, breaking the file (slice 020's `.gitignore` write, slice
+022's mutant list). The error showed only when the file was run.
+
+**Changed:** any edit whose text holds an escape sequence is written with the editor
+tool, or as a script file written by it, never inline in a heredoc.
+
+## L-023 A tool's warning list can leave things out silently (2026-10-29)
+
+Schemathesis's `missing_auth` warning counts 401 only. A plain user answered 403 on
+every admin route was counted as tested. (In the school project's next run, with the fix,
+31 routes turned out to refuse the teacher.) Found only because a test expected the
+refused list and it was empty; confirmed by changing the fixture's 403 to 401.
+
+**Changed:** "refused" is computed from the event log's real status codes (D-024). A
+tool's summary field is a claim, checked against its raw data before it is trusted.
+
 ## L-022 Measure before building can mean building less (2026-10-28)
 
 Slice 011 was planned as near-copy detection. Measuring four matchers on the real cases
