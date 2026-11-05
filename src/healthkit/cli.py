@@ -92,7 +92,7 @@ def _review(cwd: Path, base: str, fmt: str = "text", *, working_tree: bool = Fal
         key=lambda f: (f.path, f.line, f.tool, f.rule),
     )
     suppressed = [f for f in not_allowed if f.suppressed]
-    shown, remembered, _ = baseline.split(root, [f for f in not_allowed if not f.suppressed], known)
+    shown, remembered = _against_baseline(root, run, changed, settings, known)
     problems = [f for f in shown if not f.advisory]
     advisory = [f for f in shown if f.advisory]
     failed_checks = _merge_checks(project, run)
@@ -127,6 +127,38 @@ def _review(cwd: Path, base: str, fmt: str = "text", *, working_tree: bool = Fal
     result.tails, result.approvals = project.tails, approvals
     result.hidden = _hidden(settings, on_changed_lines, remembered)
     return report.emit(result, fmt)
+
+
+def _against_baseline(
+    root: Path,
+    run: _Run,
+    changed: dict[str, set[int]],
+    settings: config.Settings,
+    known: baseline.Counter[baseline.Key],
+) -> tuple[list[Finding], list[Finding]]:
+    """The new and the remembered findings on the changed lines (slice 026).
+
+    Matched against every finding in the reviewed files, the copies on unchanged lines
+    first: measured, matching the changed lines alone let a third copy of a twice-
+    remembered line take an old copy's slot ("baselined", exit 0).
+    """
+    pool = [
+        f
+        for f in run.findings
+        if not f.suppressed and not settings.is_excluded(f.path) and not settings.allows(f)
+    ]
+    mine = {f for f in pool if f.touches(changed.get(f.path, set()))}
+    pool.sort(key=lambda f: (f in mine, *_place(f)))
+    new, remembered, _ = baseline.split(root, pool, known)
+    # By changed lines, not by `mine`: a "one more copy" finding comes back with a note.
+    return (
+        sorted((f for f in new if f.touches(changed.get(f.path, set()))), key=_place),
+        sorted((f for f in remembered if f in mine), key=_place),
+    )
+
+
+def _place(finding: Finding) -> tuple[str, int, str, str]:
+    return finding.path, finding.line, finding.tool, finding.rule
 
 
 def _hidden(

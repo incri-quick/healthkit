@@ -7,6 +7,7 @@ new. The file lives in `.healthkit/`, so changing it needs a person's approval (
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections import Counter
 from typing import TYPE_CHECKING
@@ -67,6 +68,9 @@ def split(
         if left[key] > 0:
             left[key] -= 1
             remembered.append(finding)
+        elif known[key]:  # one copy too many: which copy is new, only a diff can tell
+            note = f" (one more copy of a line the baseline remembers {known[key]} time(s))"
+            new.append(dataclasses.replace(finding, message=finding.message + note))
         else:
             new.append(finding)
     gone = sum(n for key, n in left.items() if scanned is not None and key[2] in scanned)
