@@ -36,6 +36,8 @@ class Report:
     tails: dict[str, list[str]] = field(default_factory=dict)  # their last output lines
     approvals: list[str] = field(default_factory=list)
     fix_targets: list[str] = field(default_factory=list)  # scan: its folders; else the files
+    # What review hid on your lines (slice 025): ("allowed" with its reason, or "baselined").
+    hidden: list[tuple[str, Finding, str]] = field(default_factory=list)
 
 
 def _fold(report: Report) -> tuple[list[Finding], str | None]:
@@ -78,8 +80,13 @@ def _text(report: Report) -> str:
     lines += [f"worth a look: {f.render()}" for f in report.advisory]
     for finding in report.checks:
         lines += [finding.render(), *(f"    {line}" for line in report.tails[finding.rule])]
+    lines += [_hidden(kind, f, reason) for kind, f, reason in report.hidden]
     lines += [f"needs human approval: {item}" for item in report.approvals]
     return "\n".join([*lines, " | ".join(report.parts)])
+
+
+def _hidden(kind: str, finding: Finding, reason: str) -> str:
+    return f"{kind}: {finding.render()}" + (f" (reason: {reason})" if reason else "")
 
 
 def _json(report: Report) -> str:
@@ -104,6 +111,10 @@ def _json(report: Report) -> str:
         "details": report.parts[1:],
         "findings": findings,
         "approvals": report.approvals,
+        "hidden": [
+            {k: v for k, v in entry(f, kind).items() if k != "end_line"} | {"reason": reason}
+            for kind, f, reason in report.hidden
+        ],
     }
     return json.dumps(data, indent=2)
 
@@ -137,6 +148,10 @@ def _markdown(report: Report) -> str:
         lines += [
             f"- `{f.path}:{f.line}` {f.tool} {f.rule}: {cell(f.message)}" for f in report.advisory
         ]
+        lines += [""]
+    if report.hidden:
+        lines += ["### Hidden on the changed lines", ""]
+        lines += [f"- {cell(_hidden(kind, f, reason))}" for kind, f, reason in report.hidden]
         lines += [""]
     if report.approvals:
         lines += ["### Needs a person's approval", ""]

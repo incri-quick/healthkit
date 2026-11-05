@@ -118,14 +118,25 @@ def _review(cwd: Path, base: str, fmt: str = "text", *, working_tree: bool = Fal
     allowed = len(on_changed_lines) - len(not_allowed)
     parts += [f"allowed: {allowed}"] if allowed else []
     parts += [f"worth a look: {len(advisory)}"] if advisory else []
-    parts += [f"baselined: {remembered}"] if remembered else []
+    parts += [f"baselined: {len(remembered)}"] if remembered else []
     parts += [f"needs human approval: {len(approvals)} item(s)"] if approvals else []
     if others := [p for p in dirty if p not in reviewed and not working_tree]:
         parts += [f"not reviewed (uncommitted): {len(others)} file(s): {', '.join(others)}"]
     code = 2 if run.failed else 1 if new else 3 if approvals else 0
     result = report.Report("review", code, parts, problems, advisory, failed_checks)
     result.tails, result.approvals = project.tails, approvals
+    result.hidden = _hidden(settings, on_changed_lines, remembered)
     return report.emit(result, fmt)
+
+
+def _hidden(
+    settings: config.Settings, on_changed_lines: list[Finding], remembered: list[Finding]
+) -> list[tuple[str, Finding, str]]:
+    """What review hid on your lines, by name (slice 025): a teammate could not tell whether
+    "allowed: 1" was theirs, and a baseline written after a change hid its own findings."""
+    accepted = [(f, settings.allowed_by(f)) for f in on_changed_lines]
+    hidden = [("allowed", f, a.reason) for f, a in accepted if a]
+    return hidden + [("baselined", f, "") for f in remembered]
 
 
 def _uncommitted_refusal(reviewed: list[str], dirty: list[str]) -> str | None:
@@ -181,10 +192,12 @@ def _scan(cwd: Path, folders: list[str], *, write: bool, fmt: str = "text") -> i
     verdict = f"{len(new)} finding(s)" if new else "no known problems"
     parts = [f"healthkit scan: {verdict} in {len(files)} file(s)", f"ran: {', '.join(run.ran)}"]
     parts += [f"skipped: {'; '.join(run.skipped)}"] if run.skipped else []
-    parts += ["project checks are not run by scan"]
+    if settings.checks:  # named, and only when the project has some (slice 025)
+        names = ", ".join(check.name for check in settings.checks)
+        parts += [f"project checks are not run by scan: {names} (run healthkit review)"]
     parts += [f"worth a look: {len(advisory)}"] if advisory else []
     parts += [f"suppressed: {suppressed}"] if suppressed else []
-    parts += [f"baselined: {remembered}"] if remembered else []
+    parts += [f"baselined: {len(remembered)}"] if remembered else []
     parts += [f"fixed since the baseline: {gone}"] if gone else []
     code = 2 if run.failed else (1 if new else 0)
     result = report.Report("scan", code, parts, new, advisory, fix_targets=folders)

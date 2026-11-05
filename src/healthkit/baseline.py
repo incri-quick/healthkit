@@ -54,19 +54,19 @@ def save(root: Path, findings: list[Finding], scanned: set[str]) -> None:
 
 def split(
     root: Path, findings: list[Finding], known: Counter[Key], scanned: set[str] | None = None
-) -> tuple[list[Finding], int, int]:
-    """(new findings, how many were remembered, how many remembered are gone).
+) -> tuple[list[Finding], list[Finding], int]:
+    """(new findings, the remembered ones, how many remembered are gone).
 
     "Gone" is counted only for files that were fully scanned: `review` sees changed lines
     only, so it cannot tell a fixed finding from one it did not look at.
     """
     left = Counter(known)
-    new, remembered = [], 0
+    new, remembered = [], []
     for finding in findings:
         key = _key(root, finding)
         if left[key] > 0:
             left[key] -= 1
-            remembered += 1
+            remembered.append(finding)
         else:
             new.append(finding)
     gone = sum(n for key, n in left.items() if scanned is not None and key[2] in scanned)

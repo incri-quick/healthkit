@@ -29,7 +29,7 @@ Run them from inside the project's git repository.
 |---|---|
 | `healthkit review --base main` | Checks only the lines your branch **committed** since `main`. Use before you push. |
 | `healthkit review --base main --working-tree` | The same, but also your uncommitted work: staged, unstaged and new files. Use before you commit. |
-| `healthkit scan users/` | Checks **every** line of the Python files in a folder. Use to check one module. |
+| `healthkit scan users/` | Checks **every** line of the Python files in a folder: a full sweep of one module, other people's code included. For your own work, use `review`. |
 | `healthkit baseline users/` | Remembers today's findings in a folder, so later runs show only **new** ones. |
 | `healthkit api --schema <url> --token-env TOKEN_A` | Sends good and bad input to every API route; any server error (500) is a finding. Reads only (GET) unless you add `--allow-writes`. Give `--token-env` once per user: each user is tested, and with two or more it also checks that one user cannot read another's objects. Local servers only. |
 | `healthkit routes --schema <url> --callers <folder>` | Lists API routes that no client code calls. |
@@ -76,6 +76,12 @@ Exit codes are the same in every format. Machine formats are always UTF-8.
 - `needs human approval: ...`: someone changed healthkit's settings or switched a check off
   in the code (`# noqa`, `# nosemgrep`). A person must agree.
 - `baselined: N`: N old problems were hidden because they are in the baseline.
+- In `review`, each hidden finding on your changed lines is also named:
+  `allowed: path:line: [tool rule] message (reason: ...)` for an accepted exception, and
+  `baselined: path:line: ...` for a remembered one. If a baselined one is yours (a
+  baseline written after your change), fix it rather than leave it remembered.
+- `project checks are not run by scan: <names>`: the project's own `[[check]]` commands;
+  `review` runs them.
 
 Exit codes: **0** nothing found, **1** problems found, **2** could not check (never treat
 this as a pass), **3** only a settings change that needs a person's approval.

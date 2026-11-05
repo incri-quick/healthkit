@@ -70,7 +70,9 @@ def test_real_code_in_a_migrations_folder_is_still_reviewed(repo, capsys):
     assert "users/migrations/_inert_permissions.py:2: [ruff F401]" in capsys.readouterr().out
 
 
-def test_an_allowed_finding_is_counted_not_printed(repo, capsys):
+def test_an_allowed_finding_is_counted_and_labelled_never_reported(repo, capsys):
+    # Was "counted, not printed" (slice 004). Slice 025 names it, so a person can tell
+    # whether it is theirs; it must still never read as a problem.
     repo.write(".healthkit/config.toml", ALLOW_READER)
     repo.write("commons/payload.py", "x = 1\n")
     base = repo.commit("base")
@@ -78,10 +80,12 @@ def test_an_allowed_finding_is_counted_not_printed(repo, capsys):
     repo.commit()
 
     assert review(base) == 0
-    out = capsys.readouterr().out
-    assert "raw-json-body" not in out.splitlines()[0]
-    assert "allowed: 1" in out
-    assert "no known problems on changed lines" in out
+    lines = capsys.readouterr().out.splitlines()
+    reported = [line for line in lines if "raw-json-body" in line]
+    assert reported, lines
+    assert all(line.startswith("allowed: ") for line in reported)  # never a problem line
+    assert "allowed: 1" in lines[-1]
+    assert "no known problems on changed lines" in lines[-1]
 
 
 def test_an_allow_entry_does_not_hide_another_rule_in_the_same_file(repo, capsys):
