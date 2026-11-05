@@ -213,7 +213,7 @@ first place. In this pass, end-to-end scenarios found more than the scanner did.
 | bug | Project rules scan test files: the config's `exclude` does not apply to them (at least on Windows), so `paths: exclude` was repeated in all 8 rules. Rules should inherit `exclude`, tests excluded by default |
 | bug | `severity` in a rule file is silently ignored: honour it or reject it with a warning |
 | confusing | `review` only sees committed changes; a script was written to check uncommitted work. Wants `--working-tree` / `--staged` |
-| bug | A BOM in a rule file breaks parsing; PowerShell adds one by default. Strip it on load |
+| bug | A BOM in a rule file breaks parsing; PowerShell adds one by default. Strip it on load. **Not reproduced (2026-11-05, slice 027):** a rule file with a BOM, and with a BOM plus a comment first line and CRLF, both work in Opengrep 1.32.0 and `healthkit scan`. Needs the failing file before any fix. |
 | confusing | The baseline is 2,748 entries, too big to read or trust; wants a per-path view (e.g. `scorecard --path studio_robot`) |
 
 **API check problems**

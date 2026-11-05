@@ -158,7 +158,13 @@ Every project also gets two kinds of "worth a look" hints:
 - options nobody sets: a function option with a default that no call in the project ever
   passes, so its other value is dead code. If your project has code called from outside
   the repo (an SDK, a plugin API), add `[[allow]]` with rule `option-never-passed` for it.
+  A function handed over as a value (`asyncio.to_thread(f, ...)`, `partial(f)`, a
+  callback) is never reported: its calls cannot be seen.
 - `rules/*.yaml`: the project's own Opengrep rules.
+  - They skip test files, as healthkit's own checks do. A rule meant for tests says so:
+    `metadata: {healthkit-tests: true}`.
+  - Their `severity` counts: `ERROR` is a problem, `WARNING` and `INFO` are "worth a
+    look" (never failing the run).
 - `importlinter.ini`: which layers may import which.
 - `baseline.json`: written by `healthkit baseline`.
 - `misses.md`: the miss log (below).
