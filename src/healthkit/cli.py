@@ -20,6 +20,7 @@ from healthkit.tools import codespell, copies, django, importlinter, opengrep, o
 GATE_TOOLS = (ruff, opengrep, importlinter, django, copies, codespell, options)  # D-014
 BASELINE = "remember today's findings in these folders, so only new ones show"
 FORMAT = "text (default), json (AI, scripts), markdown (a PR comment), github (Actions)"
+WORKING_TREE = "also check uncommitted work: staged, unstaged and new files (before a commit)"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     review = commands.add_parser("review", help="check the lines this branch changed")
     review.add_argument("--base", required=True, help="branch or commit to compare against")
     review.add_argument("--format", choices=report.FORMATS, default="text", help=FORMAT)
+    review.add_argument("--working-tree", action="store_true", help=WORKING_TREE)
     for name, text in (("scan", "check every line of these folders"), ("baseline", BASELINE)):
         command = commands.add_parser(name, help=text)
         command.add_argument("folders", nargs="*", default=["."], help="default: the repo")
@@ -46,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         return _scorecard(Path.cwd(), args.folders, args.format)
     if args.command in {"scan", "baseline"}:
         return _scan(Path.cwd(), args.folders, write=args.command == "baseline", fmt=args.format)
-    return _review(Path.cwd(), args.base, args.format)
+    return _review(Path.cwd(), args.base, args.format, working_tree=args.working_tree)
 
 
 @dataclass
@@ -57,10 +59,11 @@ class _Run:
     failed: bool = False
 
 
-def _review(cwd: Path, base: str, fmt: str = "text") -> int:
+def _review(cwd: Path, base: str, fmt: str = "text", *, working_tree: bool = False) -> int:
     try:
         root = gitdiff.repo_root(cwd)
-        changed = gitdiff.changed_lines(root, base)
+        changed = gitdiff.changed_lines(root, base, working_tree=working_tree)
+        uncommitted = gitdiff.uncommitted(root)
         referee_changes = gitdiff.files_touched_under(root, base, config.HOME.as_posix())
         settings = config.load(root)
         # Commands from the BASE branch only: a branch's new command must not run before a
@@ -72,6 +75,10 @@ def _review(cwd: Path, base: str, fmt: str = "text") -> int:
         return 2
     python_files = sorted(path for path in changed if path.endswith((".py", ".pyi")))
     reviewed = [path for path in python_files if not settings.is_excluded(path)]
+    dirty = [p for p in uncommitted if p.endswith((".py", ".pyi")) and not settings.is_excluded(p)]
+    if not working_tree and (refusal := _uncommitted_refusal(reviewed, dirty)):
+        print(f"healthkit: {refusal}", file=sys.stderr)
+        return 2
     run = _run_tools(root, reviewed) if reviewed else _Run()
     project = checks.run(root, approved.checks, sorted(changed))
 
@@ -85,7 +92,7 @@ def _review(cwd: Path, base: str, fmt: str = "text") -> int:
         key=lambda f: (f.path, f.line, f.tool, f.rule),
     )
     suppressed = [f for f in not_allowed if f.suppressed]
-    shown, remembered, _ = baseline.split(root, [f for f in not_allowed if not f.suppressed], known)
+    shown, remembered = _against_baseline(root, run, changed, settings, known)
     problems = [f for f in shown if not f.advisory]
     advisory = [f for f in shown if f.advisory]
     failed_checks = _merge_checks(project, run)
@@ -102,6 +109,7 @@ def _review(cwd: Path, base: str, fmt: str = "text") -> int:
     else:
         summary = f"healthkit: no known problems on changed lines in {len(reviewed)} file(s)"
     parts = [summary]
+    parts += ["working tree (uncommitted changes included)"] if working_tree else []
     if reviewed or run.ran:
         parts.append(f"ran: {', '.join(run.ran) or 'nothing'}")
     parts += [f"skipped: {'; '.join(run.skipped)}"] if run.skipped else []
@@ -110,12 +118,76 @@ def _review(cwd: Path, base: str, fmt: str = "text") -> int:
     allowed = len(on_changed_lines) - len(not_allowed)
     parts += [f"allowed: {allowed}"] if allowed else []
     parts += [f"worth a look: {len(advisory)}"] if advisory else []
-    parts += [f"baselined: {remembered}"] if remembered else []
+    parts += [f"baselined: {len(remembered)}"] if remembered else []
     parts += [f"needs human approval: {len(approvals)} item(s)"] if approvals else []
+    if others := [p for p in dirty if p not in reviewed and not working_tree]:
+        parts += [f"not reviewed (uncommitted): {len(others)} file(s): {', '.join(others)}"]
     code = 2 if run.failed else 1 if new else 3 if approvals else 0
     result = report.Report("review", code, parts, problems, advisory, failed_checks)
     result.tails, result.approvals = project.tails, approvals
+    result.hidden = _hidden(settings, on_changed_lines, remembered)
     return report.emit(result, fmt)
+
+
+def _against_baseline(
+    root: Path,
+    run: _Run,
+    changed: dict[str, set[int]],
+    settings: config.Settings,
+    known: baseline.Counter[baseline.Key],
+) -> tuple[list[Finding], list[Finding]]:
+    """The new and the remembered findings on the changed lines (slice 026).
+
+    Matched against every finding in the reviewed files, the copies on unchanged lines
+    first: measured, matching the changed lines alone let a third copy of a twice-
+    remembered line take an old copy's slot ("baselined", exit 0).
+    """
+    pool = [
+        f
+        for f in run.findings
+        if not f.suppressed and not settings.is_excluded(f.path) and not settings.allows(f)
+    ]
+    mine = {f for f in pool if f.touches(changed.get(f.path, set()))}
+    pool.sort(key=lambda f: (f in mine, *_place(f)))
+    new, remembered, _ = baseline.split(root, pool, known)
+    # By changed lines, not by `mine`: a "one more copy" finding comes back with a note.
+    return (
+        sorted((f for f in new if f.touches(changed.get(f.path, set()))), key=_place),
+        sorted((f for f in remembered if f in mine), key=_place),
+    )
+
+
+def _place(finding: Finding) -> tuple[str, int, str, str]:
+    return finding.path, finding.line, finding.tool, finding.rule
+
+
+def _hidden(
+    settings: config.Settings, on_changed_lines: list[Finding], remembered: list[Finding]
+) -> list[tuple[str, Finding, str]]:
+    """What review hid on your lines, by name (slice 025): a teammate could not tell whether
+    "allowed: 1" was theirs, and a baseline written after a change hid its own findings."""
+    accepted = [(f, settings.allowed_by(f)) for f in on_changed_lines]
+    hidden = [("allowed", f, a.reason) for f, a in accepted if a]
+    return hidden + [("baselined", f, "") for f in remembered]
+
+
+def _uncommitted_refusal(reviewed: list[str], dirty: list[str]) -> str | None:
+    """Committed-only review must never pass silently over uncommitted work (slice 023).
+    Measured: an uncommitted edit in a reviewed file moved a committed problem off the
+    committed line numbers (missed, exit 0); with nothing committed it said "nothing to
+    review", exit 0, while the work sat uncommitted."""
+    if stale := [p for p in reviewed if p in dirty]:
+        return (
+            f"{len(stale)} changed file(s) also have uncommitted changes, so their "
+            f"committed lines cannot be checked: {', '.join(stale)}. Commit or stash them, "
+            f"or use --working-tree."
+        )
+    if dirty and not reviewed:
+        return (
+            f"nothing committed to review, but {len(dirty)} uncommitted Python file(s): "
+            f"{', '.join(dirty)}. Use --working-tree to check them."
+        )
+    return None
 
 
 def _scan(cwd: Path, folders: list[str], *, write: bool, fmt: str = "text") -> int:
@@ -152,13 +224,16 @@ def _scan(cwd: Path, folders: list[str], *, write: bool, fmt: str = "text") -> i
     verdict = f"{len(new)} finding(s)" if new else "no known problems"
     parts = [f"healthkit scan: {verdict} in {len(files)} file(s)", f"ran: {', '.join(run.ran)}"]
     parts += [f"skipped: {'; '.join(run.skipped)}"] if run.skipped else []
-    parts += ["project checks are not run by scan"]
+    if settings.checks:  # named, and only when the project has some (slice 025)
+        names = ", ".join(check.name for check in settings.checks)
+        parts += [f"project checks are not run by scan: {names} (run healthkit review)"]
     parts += [f"worth a look: {len(advisory)}"] if advisory else []
     parts += [f"suppressed: {suppressed}"] if suppressed else []
-    parts += [f"baselined: {remembered}"] if remembered else []
+    parts += [f"baselined: {len(remembered)}"] if remembered else []
     parts += [f"fixed since the baseline: {gone}"] if gone else []
     code = 2 if run.failed else (1 if new else 0)
-    return report.emit(report.Report("scan", code, parts, new, advisory), fmt)
+    result = report.Report("scan", code, parts, new, advisory, fix_targets=folders)
+    return report.emit(result, fmt)
 
 
 def _scorecard(cwd: Path, folders: list[str], fmt: str) -> int:

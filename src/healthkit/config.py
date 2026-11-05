@@ -89,7 +89,14 @@ class Settings:
         return any(glob_match(path, pattern) for pattern in self.exclude)
 
     def allows(self, finding: Finding) -> bool:
-        return any(a.rule == finding.rule and glob_match(finding.path, a.path) for a in self.allow)
+        return self.allowed_by(finding) is not None
+
+    def allowed_by(self, finding: Finding) -> Allow | None:
+        """The `[[allow]]` entry that accepts this finding, so its reason can be shown."""
+        matches = (
+            a for a in self.allow if a.rule == finding.rule and glob_match(finding.path, a.path)
+        )
+        return next(matches, None)
 
 
 def load(root: Path) -> Settings:

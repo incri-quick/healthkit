@@ -27,12 +27,27 @@ Run them from inside the project's git repository.
 
 | Command | What it does |
 |---|---|
-| `healthkit review --base main` | Checks only the lines your branch changed since `main`. Use before you push. |
-| `healthkit scan users/` | Checks **every** line of the Python files in a folder. Use to check one module. |
+| `healthkit review --base main` | Checks only the lines your branch **committed** since `main`. Use before you push. |
+| `healthkit review --base main --working-tree` | The same, but also your uncommitted work: staged, unstaged and new files. Use before you commit. |
+| `healthkit scan users/` | Checks **every** line of the Python files in a folder: a full sweep of one module, other people's code included. For your own work, use `review`. |
 | `healthkit baseline users/` | Remembers today's findings in a folder, so later runs show only **new** ones. |
 | `healthkit api --schema <url> --token-env TOKEN_A` | Sends good and bad input to every API route; any server error (500) is a finding. Reads only (GET) unless you add `--allow-writes`. Give `--token-env` once per user: each user is tested, and with two or more it also checks that one user cannot read another's objects. Local servers only. |
 | `healthkit routes --schema <url> --callers <folder>` | Lists API routes that no client code calls. |
 | `healthkit scorecard [folders]` | One row of facts per module, the ones needing attention first: files, lines, too-complex functions, the most complex one, problems and hints. |
+
+### Committed work and uncommitted work
+
+`review` checks commits, because commits are what get pushed and merged. It never
+passes silently over work you have not committed:
+
+- If a file it checks also has uncommitted edits, it stops with **exit 2** and names the
+  file: the checkers read the file on disk, so its committed lines cannot be checked.
+  Commit or stash the edits, or add `--working-tree`.
+- If nothing is committed but you have uncommitted Python work, it stops with exit 2 and
+  tells you to use `--working-tree`, instead of saying "nothing to review".
+- Other uncommitted files are listed as `not reviewed (uncommitted)`.
+- An uncommitted change to `.healthkit/` always needs a person's approval, in both modes:
+  the settings on disk are the ones that run.
 
 ### Output formats
 
@@ -51,10 +66,22 @@ Exit codes are the same in every format. Machine formats are always UTF-8.
 ### What the results mean
 
 - `path:line: [tool rule] message`: a problem. Fix it, or explain it (see "Exceptions").
-- `worth a look: ...`: a hint, about half of these are real. It never fails the run.
+- `style: N finding(s) ... Fix: <command>`: import order and unused imports. In `scan`
+  they are counted on this one line instead of one line each (they were half or more of
+  every scan measured); in `review` they are also listed one by one. Run the printed
+  command to fix them all; `--format json` lists each one.
+- `worth a look: ...`: a hint, about half of these are real. It never fails the run. An
+  "undefined name" inside a quoted type (`Mapped["User"]`) is a hint: usually a forward
+  reference the framework resolves at runtime.
 - `needs human approval: ...`: someone changed healthkit's settings or switched a check off
   in the code (`# noqa`, `# nosemgrep`). A person must agree.
 - `baselined: N`: N old problems were hidden because they are in the baseline.
+- In `review`, each hidden finding on your changed lines is also named:
+  `allowed: path:line: [tool rule] message (reason: ...)` for an accepted exception, and
+  `baselined: path:line: ...` for a remembered one. If a baselined one is yours (a
+  baseline written after your change), fix it rather than leave it remembered.
+- `project checks are not run by scan: <names>`: the project's own `[[check]]` commands;
+  `review` runs them.
 
 Exit codes: **0** nothing found, **1** problems found, **2** could not check (never treat
 this as a pass), **3** only a settings change that needs a person's approval.
@@ -131,7 +158,13 @@ Every project also gets two kinds of "worth a look" hints:
 - options nobody sets: a function option with a default that no call in the project ever
   passes, so its other value is dead code. If your project has code called from outside
   the repo (an SDK, a plugin API), add `[[allow]]` with rule `option-never-passed` for it.
+  A function handed over as a value (`asyncio.to_thread(f, ...)`, `partial(f)`, a
+  callback) is never reported: its calls cannot be seen.
 - `rules/*.yaml`: the project's own Opengrep rules.
+  - They skip test files, as healthkit's own checks do. A rule meant for tests says so:
+    `metadata: {healthkit-tests: true}`.
+  - Their `severity` counts: `ERROR` is a problem, `WARNING` and `INFO` are "worth a
+    look" (never failing the run).
 - `importlinter.ini`: which layers may import which.
 - `baseline.json`: written by `healthkit baseline`.
 - `misses.md`: the miss log (below).
@@ -163,6 +196,10 @@ When asked to check a module with healthkit:
    design, naming, missing tests. That is where your review adds value.
 5. For every problem you find that healthkit did not, propose one line for
    `.healthkit/misses.md`.
+
+When checking your own changes: before a commit, run
+`healthkit review --base <main branch> --working-tree`; before a push, run it without
+`--working-tree`. Exit 2 means it could not check: say why, never report a pass.
 
 Never:
 - edit anything in `.healthkit/` to make a finding go away;

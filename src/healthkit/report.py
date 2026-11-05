@@ -12,10 +12,17 @@ import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from healthkit.tools import ruff
+
 if TYPE_CHECKING:
     from healthkit.findings import Finding
 
 FORMATS = ("text", "json", "markdown", "github")
+# Folded into one line for people (slice 024): measured, half of QuickRPA's findings and two
+# thirds of the school project's, and `ruff check --fix` repairs every one. Still problems.
+STYLE = {"I001": "import order", "F401": "unused imports"}
+_FIX = " ".join([*ruff.COMMAND, "check", "--isolated", "--fix", "--select", ",".join(STYLE)])
+_NAMED = 10  # files named in the fix command; the rest are counted
 
 
 @dataclass
@@ -28,6 +35,32 @@ class Report:
     checks: list[Finding] = field(default_factory=list)  # a project's own failing checks
     tails: dict[str, list[str]] = field(default_factory=dict)  # their last output lines
     approvals: list[str] = field(default_factory=list)
+    fix_targets: list[str] = field(default_factory=list)  # scan: its folders; else the files
+    # What review hid on your lines (slice 025): ("allowed" with its reason, or "baselined").
+    hidden: list[tuple[str, Finding, str]] = field(default_factory=list)
+
+
+def _fold(report: Report) -> tuple[list[Finding], str | None]:
+    """The problems to show one by one, and one line for the style ones with the command
+    that fixes them. Folded only in `scan`, where the volume was measured (whole modules);
+    `review` shows the few on your own lines in full, plus the same fix line."""
+    style = [f for f in report.problems if f.tool == "ruff" and f.rule in STYLE]
+    if not style:
+        return report.problems, None
+    counts = ", ".join(
+        f"{name} ({rule}) {n}"
+        for rule, name in STYLE.items()
+        if (n := [f.rule for f in style].count(rule))
+    )
+    files = sorted({f.path for f in style})
+    targets = report.fix_targets or files
+    named = " ".join(targets[:_NAMED]) + (
+        f" (and {len(targets) - _NAMED} more)" if len(targets) > _NAMED else ""
+    )
+    line = f"style: {len(style)} finding(s), {counts}, in {len(files)} file(s). Fix: {_FIX} {named}"
+    if report.command != "scan":
+        return report.problems, line
+    return [f for f in report.problems if f not in style], line
 
 
 def emit(report: Report, fmt: str) -> int:
@@ -42,12 +75,18 @@ def emit(report: Report, fmt: str) -> int:
 
 
 def _text(report: Report) -> str:
-    lines = [f.render() for f in report.problems]
+    shown, style = _fold(report)
+    lines = [f.render() for f in shown] + ([style] if style else [])
     lines += [f"worth a look: {f.render()}" for f in report.advisory]
     for finding in report.checks:
         lines += [finding.render(), *(f"    {line}" for line in report.tails[finding.rule])]
+    lines += [_hidden(kind, f, reason) for kind, f, reason in report.hidden]
     lines += [f"needs human approval: {item}" for item in report.approvals]
     return "\n".join([*lines, " | ".join(report.parts)])
+
+
+def _hidden(kind: str, finding: Finding, reason: str) -> str:
+    return f"{kind}: {finding.render()}" + (f" (reason: {reason})" if reason else "")
 
 
 def _json(report: Report) -> str:
@@ -72,6 +111,10 @@ def _json(report: Report) -> str:
         "details": report.parts[1:],
         "findings": findings,
         "approvals": report.approvals,
+        "hidden": [
+            {k: v for k, v in entry(f, kind).items() if k != "end_line"} | {"reason": reason}
+            for kind, f, reason in report.hidden
+        ],
     }
     return json.dumps(data, indent=2)
 
@@ -81,14 +124,14 @@ def _markdown(report: Report) -> str:
         return text.replace("|", "\\|").replace("\n", " ")
 
     lines = [f"## {report.parts[0]}", ""]
-    if report.problems:
-        lines += [f"### Problems ({len(report.problems)})", "", "| Where | Check | What |"]
+    shown, style = _fold(report)
+    if shown:
+        lines += [f"### Problems ({len(shown)})", "", "| Where | Check | What |"]
         lines += ["|---|---|---|"]
-        lines += [
-            f"| `{f.path}:{f.line}` | {f.tool} {f.rule} | {cell(f.message)} |"
-            for f in report.problems
-        ]
+        lines += [f"| `{f.path}:{f.line}` | {f.tool} {f.rule} | {cell(f.message)} |" for f in shown]
         lines += [""]
+    if style:
+        lines += [f"`{style}`", ""]
     if report.checks:
         lines += ["### The project's own checks failed", ""]
         for finding in report.checks:
@@ -105,6 +148,10 @@ def _markdown(report: Report) -> str:
         lines += [
             f"- `{f.path}:{f.line}` {f.tool} {f.rule}: {cell(f.message)}" for f in report.advisory
         ]
+        lines += [""]
+    if report.hidden:
+        lines += ["### Hidden on the changed lines", ""]
+        lines += [f"- {cell(_hidden(kind, f, reason))}" for kind, f, reason in report.hidden]
         lines += [""]
     if report.approvals:
         lines += ["### Needs a person's approval", ""]

@@ -53,13 +53,19 @@ def repo_root(start: Path) -> Path:
         raise GitError(msg) from exc
 
 
-def changed_lines(root: Path, base: str) -> dict[str, set[int]]:
-    """Lines changed on this branch since it left `base` (committed changes only)."""
+def changed_lines(root: Path, base: str, *, working_tree: bool = False) -> dict[str, set[int]]:
+    """Lines changed on this branch since it left `base`: committed changes only, or with
+    `working_tree` the files as they are on disk, staged, unstaged and untracked included
+    (slice 023: measured, the diff against the merge base gives the working tree's own
+    line numbers)."""
     try:
         _git(root, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}")
     except GitError as exc:
         msg = f"unknown base: {base}"
         raise GitError(msg) from exc
+    target = (
+        [_git(root, "merge-base", base, "HEAD").strip()] if working_tree else [f"{base}...HEAD"]
+    )
     diff = _git(
         root,
         "diff",
@@ -72,9 +78,26 @@ def changed_lines(root: Path, base: str) -> dict[str, set[int]]:
         "--no-textconv",
         "-M",
         "--diff-filter=AMR",
-        f"{base}...HEAD",
+        *target,
     )
-    return parse_changed_lines(diff)
+    changed = parse_changed_lines(diff)
+    for path in untracked(root) if working_tree else []:
+        lines = (root / path).read_bytes().splitlines() if (root / path).is_file() else []
+        if lines:  # a new file: every line is new
+            changed[path] = set(range(1, len(lines) + 1))
+    return changed
+
+
+def untracked(root: Path) -> list[str]:
+    """New files git does not track yet and does not ignore."""
+    return _git(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0")[:-1]
+
+
+def uncommitted(root: Path) -> list[str]:
+    """Every file whose working copy differs from the last commit: staged, unstaged,
+    deleted, or new and untracked."""
+    changed = _git(root, "diff", "--name-only", "-z", "--no-renames", "HEAD").split("\0")[:-1]
+    return sorted(set(changed) | set(untracked(root)))
 
 
 def files_touched_under(root: Path, base: str, folder: str) -> list[str]:
@@ -86,10 +109,14 @@ def files_touched_under(root: Path, base: str, folder: str) -> list[str]:
     Matched ignoring case: on Windows `.Healthkit/` is loaded as the config folder, so it
     must be flagged too (slice 004 verifier finding). Not a git pathspec, which is
     case-sensitive.
+
+    Uncommitted changes count too (slice 023): the settings are read from disk, so an
+    uncommitted `exclude` once hid a committed problem with exit 0 and no approval.
     """
-    names = _git(root, "diff", "--name-only", "--no-renames", f"{base}...HEAD")
+    names = _git(root, "diff", "--name-only", "--no-renames", f"{base}...HEAD").splitlines()
     prefix = folder.casefold().rstrip("/") + "/"
-    return sorted(name for name in names.splitlines() if name.casefold().startswith(prefix))
+    touched = set(names) | set(uncommitted(root))
+    return sorted(name for name in touched if name.casefold().startswith(prefix))
 
 
 def file_at(root: Path, ref: str, path: str) -> str | None:

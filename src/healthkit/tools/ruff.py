@@ -22,6 +22,9 @@ COMMAND = ["uvx", "ruff@0.17.2"]
 GATE_RULES = "F821,F401,F811,I001,RUF052,N806,N814,PLC2701,BLE001"
 # For every project, advisory (slice 013, D-023): a quality signal, its threshold a judgement.
 ADVISORY = {"C901"}
+# A name inside a quoted type (`Mapped["Student"]`) is a hint, not a problem (slice 024):
+# all 17 in the school project were SQLAlchemy forward references, resolved at runtime.
+QUOTED = " (inside a quoted type: often a forward reference resolved at runtime)"
 _BATCH = 200  # keep each command line short (Windows limit)
 
 
@@ -73,17 +76,37 @@ def _check(root: Path, files: list[str], rules: str, *extra: str) -> list[Findin
 
 def _to_finding(root: Path, item: dict) -> Finding:
     path = Path(item["filename"]).resolve().relative_to(root.resolve()).as_posix()
-    line = item["location"]["row"]
-    advisory = item["code"] in ADVISORY
+    line, column = item["location"]["row"], item["location"]["column"]
+    quoted = item["code"] == "F821" and in_quotes(root / path, line, column)
     return Finding(
         tool="ruff",
         rule=item["code"] or "syntax",
         path=path,
         line=line,
-        message=item["message"],
-        advisory=advisory,
+        message=item["message"] + (QUOTED if quoted else ""),
+        advisory=quoted or item["code"] in ADVISORY,
         # A function-level finding covers the function: an edit inside it shows it.
-        end_line=_function_end(root / path, line) if advisory else 0,
+        end_line=_function_end(root / path, line) if item["code"] in ADVISORY else 0,
+    )
+
+
+def in_quotes(file: Path, line: int, column: int) -> bool:
+    """Is (line, column) inside a string literal? Measured: ruff puts F821 on the name,
+    inside the quotes. The parser, not a text search: in an f-string, `{Missing}` is code
+    (it crashes at runtime) while the text around it is a string (Python 3.12 parser)."""
+    try:
+        source = file.read_bytes()
+        tree = ast.parse(source)
+    except (OSError, SyntaxError, ValueError):
+        return False  # cannot tell: the finding stays a problem
+    # ruff counts characters from 1; ast counts UTF-8 bytes from 0 (`ééé` is 6 bytes).
+    text = source.decode("utf-8", "replace").splitlines()
+    before = text[line - 1][: column - 1] if line <= len(text) else ""
+    where = (line, len(before.encode("utf-8")))
+    return any(
+        (node.lineno, node.col_offset) <= where < (node.end_lineno or 0, node.end_col_offset or 0)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
     )
 
 

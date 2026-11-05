@@ -76,9 +76,15 @@ def _options(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[tuple[str, fl
 
 
 def _calls(root: Path, names: set[str]) -> dict[str, list[Call]]:
-    """Every call by these names across the project, tests included (a test is a caller)."""
+    """Every call by these names across the project, tests included (a test is a caller).
+
+    A function handed over as a value (`asyncio.to_thread(execute_node, ...)`, `partial`,
+    a callback) is called by someone else, with options we cannot see: recorded as an
+    unknowable call, like `*args` (slice 027: QuickRPA's `execute_node` was reported
+    "never passed" though every option went through `to_thread`).
+    """
     settings = config.load(root)
-    wanted = re.compile(rb"\b(" + b"|".join(n.encode() for n in names) + rb")\s*\(")
+    wanted = re.compile(rb"\b(" + b"|".join(n.encode() for n in names) + rb")\b")
     calls: dict[str, list[Call]] = {}
     for path in gitdiff.project_files(root):
         if not path.endswith(".py") or settings.is_excluded(path):
@@ -88,8 +94,10 @@ def _calls(root: Path, names: set[str]) -> dict[str, list[Call]]:
         for node in ast.walk(_parse(root, path)):
             if not isinstance(node, ast.Call):
                 continue
-            func = node.func
-            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            for value in [*node.args, *(k.value for k in node.keywords)]:
+                if (passed := _name(value)) in names:
+                    calls.setdefault(passed, []).append((set(), 0, True))
+            name = _name(node.func)
             if name in names:
                 star = any(isinstance(a, ast.Starred) for a in node.args) or any(
                     k.arg is None for k in node.keywords
@@ -98,6 +106,11 @@ def _calls(root: Path, names: set[str]) -> dict[str, list[Call]]:
                     ({k.arg for k in node.keywords if k.arg}, len(node.args), star)
                 )
     return calls
+
+
+def _name(node: ast.expr) -> str | None:
+    """`f` for `f` or `module.f`; None for anything else."""
+    return node.attr if isinstance(node, ast.Attribute) else getattr(node, "id", None)
 
 
 def _parse(root: Path, path: str) -> ast.Module:
