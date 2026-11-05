@@ -66,7 +66,13 @@ Exit codes are the same in every format. Machine formats are always UTF-8.
 ### What the results mean
 
 - `path:line: [tool rule] message`: a problem. Fix it, or explain it (see "Exceptions").
-- `worth a look: ...`: a hint, about half of these are real. It never fails the run.
+- `style: N finding(s) ... Fix: <command>`: import order and unused imports. In `scan`
+  they are counted on this one line instead of one line each (they were half or more of
+  every scan measured); in `review` they are also listed one by one. Run the printed
+  command to fix them all; `--format json` lists each one.
+- `worth a look: ...`: a hint, about half of these are real. It never fails the run. An
+  "undefined name" inside a quoted type (`Mapped["User"]`) is a hint: usually a forward
+  reference the framework resolves at runtime.
 - `needs human approval: ...`: someone changed healthkit's settings or switched a check off
   in the code (`# noqa`, `# nosemgrep`). A person must agree.
 - `baselined: N`: N old problems were hidden because they are in the baseline.

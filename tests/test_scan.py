@@ -18,18 +18,22 @@ def baseline(*folders: str) -> int:
     return cli.main(["baseline", *folders])
 
 
+def found(capsys) -> set[str]:
+    """`path:line rule` of every finding in a `--format json` run. scan's text folds import
+    order and unused imports into one line (slice 024); JSON lists each one."""
+    data = json.loads(capsys.readouterr().out)
+    return {f"{f['path']}:{f['line']} {f['rule']}" for f in data["findings"]}
+
+
 def test_every_line_of_the_folder_is_checked_and_only_that_folder(repo, capsys):
     repo.write("pkg/a.py", "x = 1\n" + UNUSED)
     repo.write("other/b.py", UNUSED)
     repo.commit()  # nothing is "changed": scan does not look at the diff
 
-    code = scan("pkg")
+    code = scan("pkg", "--format", "json")
 
-    out = capsys.readouterr().out
     assert code == 1
-    assert "pkg/a.py:2: [ruff F401]" in out
-    assert "other/b.py" not in out
-    assert "1 finding(s) in 1 file(s)" in out
+    assert found(capsys) == {"pkg/a.py:2 F401"}  # and nothing from other/
 
 
 def test_a_folder_that_does_not_exist_is_never_a_pass(repo, capsys):
@@ -102,8 +106,10 @@ def test_a_second_copy_of_a_baselined_line_is_new(repo, capsys):
 
     assert scan("pkg") == 1
     out = capsys.readouterr().out
-    assert "pkg/a.py:3: [ruff F401]" in out
+    assert "unused imports (F401) 1, in 1 file(s)" in out  # only the second copy is new
     assert "baselined: 1" in out
+    assert scan("pkg", "--format", "json") == 1
+    assert "pkg/a.py:3 F401" in found(capsys)
 
 
 def test_a_fixed_finding_is_counted(repo, capsys):
@@ -139,8 +145,8 @@ def test_a_failing_tool_does_not_hide_the_others(repo, capsys, monkeypatch):
     repo.write("pkg/a.py", UNUSED)
     repo.commit()
 
-    assert scan("pkg") == 2
-    assert "pkg/a.py:1: [ruff F401]" in capsys.readouterr().out
+    assert scan("pkg", "--format", "json") == 2
+    assert "pkg/a.py:1 F401" in found(capsys)
 
 
 def test_review_skips_baselined_findings_on_changed_lines(repo, capsys):

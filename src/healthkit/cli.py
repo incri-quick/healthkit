@@ -187,7 +187,8 @@ def _scan(cwd: Path, folders: list[str], *, write: bool, fmt: str = "text") -> i
     parts += [f"baselined: {remembered}"] if remembered else []
     parts += [f"fixed since the baseline: {gone}"] if gone else []
     code = 2 if run.failed else (1 if new else 0)
-    return report.emit(report.Report("scan", code, parts, new, advisory), fmt)
+    result = report.Report("scan", code, parts, new, advisory, fix_targets=folders)
+    return report.emit(result, fmt)
 
 
 def _scorecard(cwd: Path, folders: list[str], fmt: str) -> int:
