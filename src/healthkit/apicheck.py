@@ -67,6 +67,8 @@ def _run(args, report_dir: Path, *, kept: bool) -> int:  # noqa: ANN001 - argpar
         schemathesis.check_hosts_are_local(urls, args.allow_remote_host)
         users = _users(args.token_env)
         settings = _settings()
+        if setup := policy.expected(settings.api_deny, list(users)):
+            print(setup, flush=True)  # before a long run, not after it (slice 028)
         result = schemathesis.run(
             args.schema,
             args.base_url,
@@ -107,6 +109,8 @@ def _run(args, report_dir: Path, *, kept: bool) -> int:  # noqa: ANN001 - argpar
     parts += [f"allowed: {allowed}"] if allowed else []
     if settings.api_deny:
         parts += [f"access policy: {access.refused} route(s) refused as required"]
+    if settings.api_deny and len(users) == 1:
+        parts += ["refusals not compared with an allowed user (give one more --token-env)"]
     shallow = len({op for operations in result.shallow.values() for op in operations})
     parts += [f"shallow (no valid sample data): {shallow}"] if shallow else []
     parts += [f"reports: {report_dir}" if kept else "reports: deleted (keep them: --report-dir)"]

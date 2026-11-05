@@ -113,11 +113,16 @@ this as a pass), **3** only a settings change that needs a person's approval.
   Any 2xx answer to that user on a matching route is a finding: `[policy must-refuse]`.
   It says how big the largest answer was, `got 200 (469 records)` or `got 200 (empty)`,
   so a real leak stands out from an empty list. Only the count is shown, never the data.
-  A 401 or 403 is "refused as required". Anything else (only 404, only 422) is listed
-  under `access policy not checked`, because a 404 can mean a guessed id as easily as a
-  refusal. A route pattern that matches nothing tested is exit 2, so a typo never passes.
-  It catches a route open to the wrong role, not a route that returns too many rows to
-  the right role.
+  A 401 or 403 is "refused as required", but only if another user got a successful
+  answer on that same route: a route that refuses everyone (an allowed user's token
+  without the permission, or a broken route) proves nothing, and is listed as not
+  checked. So give `--token-env` for a user who IS allowed, as well as the ones who are
+  not. With a single user there is nothing to compare, and the summary says so.
+  Anything else (only 404, only 422) is listed under `access policy not checked`, because
+  a 404 can mean a guessed id as easily as a refusal. A route pattern that matches nothing
+  tested is exit 2, so a typo never passes. The users your rules expect are named before
+  the run starts, so a missing one does not cost a whole run. It catches a route open to
+  the wrong role, not a route that returns too many rows to the right role.
 - **Shallow routes are listed per user**: routes with an id in the path that only got
   "not found", because no real id was known. Give real ids in `[api.parameters]`.
 - Tokens are read from environment variables, never typed on the command line, and never
